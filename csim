@@ -1,0 +1,426 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Data::Dumper;
+use Term::ReadKey;
+use IO::Pty;
+use Storable;
+
+# FISC Simulator, (C) 2020 Warren Toomey, GPL3
+
+# Eight banks of 64K of RAM
+my @RAM= ([(0)x65536], [(0)x65536], [(0)x65536],
+	[(0)x65536], [(0)x65536], [(0)x65536], [(0)x65536], [(0)x65536]);
+my @ROM;
+my $ALUROM;
+my @DecodeROM;
+my $debug=0;
+my $Bank=0;
+my $PChi=0;
+my $PClo=0;
+my $ARhi=0;
+my $ARlo=0;
+my $DRhi=0;
+my $DRlo=0;
+my $SPhi=0;
+my $SPlo=0;
+my $IR=0;
+my $A=0;
+my $B=0;
+my $Olow=0;
+my $Ohigh=0;
+my $phase=0;
+
+my $abuswrop;
+my $dbuswrop;
+my $dbusrdop;
+my $aluop;
+my $jumpop;
+my $stackop;
+my $jumpena;
+my $pcincr;
+my $usreset;
+my $carry= 0;
+my $zero;
+my $notzero;
+my $negative;
+my $negorzero;
+my $zeronneg;
+my $notnnotz;
+
+# By default, UART I/O goes to STDIN/OUT
+my $IN=   *STDIN;
+my $OUT= *STDOUT;
+
+# Read and return one character from the terminal
+sub readterm {
+    my ($ch, $cnt);
+
+    while (1) {
+        $cnt = sysread( $IN, $ch, 1 );
+
+        #print("Got cnt $cnt\n");
+        return ($ch) if ( $cnt == 1 );
+    }
+}
+
+# List of control line masks and shifts.
+use constant {
+  ALUOP    => 0x000F,		# ALU operation
+  JUMPOP   => 0x0007,		# Jump operation
+
+  IRSHIFT        => 4,
+  CSHIFT         => 8,
+  ZSHIFT         => 1,
+  NSHIFT         => 2,
+  NOTZSHIFT      => 3,
+  NEGORZEROSHIFT => 4,
+  ZERONNEGSHIFT  => 5,
+  NOTNNOTZSHIFT  => 6,
+
+  # Masks for the Decode Logic
+  # control lines
+
+  ALUOP    => 0x000F,
+  ABUSWROP => 0x0003, ABUSWRSHIFT  =>  4,
+  STACKOP  => 0x0003, STACKSHIFT   =>  6,
+  DBUSWROP => 0x000F, DBUSWRSHIFT  =>  8,
+  DBUSRDOP => 0x000F, DBUSRDSHIFT  => 12,
+
+  PCwrite => 0x0,
+  ARwrite => 0x1,
+  SPwrite => 0x2,
+  DRwrite => 0x3,
+
+  Stkincr => 0x0,
+  Stkdecr => 0x1,
+  Stkhold => 0x2,
+  PCincr  => 0x3,
+
+  MEMwrite  => 0x0,
+  ADhiwrite => 0x1,
+  ADlowrite => 0x2,
+  UARTwrite => 0x3,
+  Awrite    => 0x4,
+  Olowrite  => 0x5,
+  Ohiwrite  => 0x6,
+  ARincr    => 0x7,
+  uSreset   => 0x8,
+
+  DRincr    => 0x1,
+  SPhiread  => 0x2,
+  SPloread  => 0x3,
+  ARhiread  => 0x4,
+  ARloread  => 0x5,
+  DRhiread  => 0x6,
+  DRloread  => 0x7,
+  Bankread  => 0x8,
+  Aread     => 0x9,
+  Bread     => 0xA,
+  IRread    => 0xB,
+  MEMread   => 0xC,
+  Oread     => 0xD,
+  UARTread  => 0xE,
+  Jmpena    => 0xF,
+};
+
+# List of ALUop names
+my @ALUop = (
+    "A+B",
+    "A-B",
+    "A&B",
+    "A|B",
+    "A^B",
+    "A<<B",
+    "A>>B",
+    "A*B",
+    "A/B",
+    "A%B",
+    "A+0",
+    "A-Bcmp",
+    "Zero",
+    "A+1",
+    "A-1",
+    "~A",
+);
+
+# Function to set the terminal back to normal
+sub restore_terminal {
+  ReadMode('normal', $IN); exit(0);
+}
+
+# Enable debugging, pty I/O and randomised memory
+while (@ARGV > 0) {
+  # Set debug mode
+  if ($ARGV[0] eq "-d") { $debug++; shift(@ARGV); next; }
+
+  # Open up a pty
+  if ($ARGV[0] eq "-p") {
+    $OUT = new IO::Pty; $IN= $OUT;
+    print("pty is ", $OUT->ttyname(), "\n");
+    shift(@ARGV); next;
+  }
+
+  # Randomise the RAM
+  if ($ARGV[0] eq "-r") {
+    foreach my $b (0 .. 7) {
+      foreach my $i (0 .. 65535) {
+        $RAM[$b][$i]= int(rand(256));
+      }
+    }
+    shift(@ARGV); next;
+  }
+  die("Usage: $0 [-d] [-p] [-r]\n-d: debug, -r: randomise RAM, -p: open pty\n");
+}
+
+# Load the ALU ROM
+my $ROMIN;
+if (-f "alu.hex") {
+  $ALUROM = retrieve("alu.hex");
+} else {
+  # Load the ROM file and store a cached version
+  open( $ROMIN, "<", "alu.rom" ) || die("Can't open alu.rom: $!\n");
+  while (<$ROMIN>) {
+    chomp; push( @{ $ALUROM }, map( { hex($_) } split( /\s/, $_ ) ) );
+  }
+  close($ROMIN);
+  store($ALUROM, "alu.hex");
+}
+
+# Load the Decode ROM
+open( $ROMIN, "<", "ucode.rom" ) || die("Can't open ucode.rom: $!\n");
+while (<$ROMIN>) {
+    chomp; push( @DecodeROM, map( { hex($_) } split( /\s+/, $_ ) ) );
+}
+close($ROMIN);
+
+# Load the instruction ROM
+open( $ROMIN, "<", "instr.rom" ) || die("Can't open instr.rom: $!\n");
+while (<$ROMIN>) {
+    chomp; push( @ROM, map( { hex($_) } split( /\s+/, $_ ) ) );
+}
+close($ROMIN);
+
+# Set the UART up to read one char at a time,
+# and ensure that we restore it if signals arrive
+ReadMode('cbreak', $IN) if (!$debug);
+$SIG{INT}  = \&restore_terminal;
+$SIG{TERM} = \&restore_terminal;
+$SIG{PIPE} = \&restore_terminal;
+
+# Start the simulation
+while (1) {
+  # Work out the decode ROM index
+  my $decodeidx= ($IR << IRSHIFT) | $phase;
+
+  # Get the microinstruction
+  my $uinst= $DecodeROM[ $decodeidx ];
+
+  # Decode the microinstruction
+  $jumpop= $IR & JUMPOP;
+  $aluop= $uinst & ALUOP;
+  $dbuswrop= ($uinst>>DBUSWRSHIFT) & DBUSWROP;
+  $abuswrop= ($uinst>>ABUSWRSHIFT) & ABUSWROP;
+  $dbusrdop= ($uinst>>DBUSRDSHIFT) & DBUSRDOP;
+  $stackop=  ($uinst>>STACKSHIFT) & STACKOP;
+  $usreset=  ($dbuswrop == uSreset);
+  $jumpena=  ($dbusrdop == Jmpena);
+  $pcincr=   ($stackop == PCincr);
+  printf("PC %02x%02x IR %02x uinst 0x%04x ", $PChi, $PClo, $IR, $uinst)
+								if ($debug);
+  #printf("\talu %02x jmp %x dw %x aw %x dr %x stk %x us %x je %x pc %x\n\t\t",
+  #	$aluop, $jumpop, $dbuswrop, $abuswrop, $dbusrdop, $stackop,
+  #	$usreset, $jumpena, $pcincr) if ($debug);
+
+  # Update the stack pointer
+  if ($stackop == Stkincr) {
+    my $tempSP= ($SPhi<<8) | $SPlo;
+    $tempSP++; 
+    $SPhi= ($tempSP >> 8) & 0xFF;
+    $SPlo= $tempSP & 0xFF;
+    printf("%04x => SP ", $tempSP & 0xFFFF) if ($debug);
+  }
+  if ($stackop == Stkdecr) {
+    my $tempSP= ($SPhi<<8) | $SPlo;
+    $tempSP--;
+    $SPhi= ($tempSP >> 8) & 0xFF;
+    $SPlo= $tempSP & 0xFF;
+    printf("%04x => SP ", $tempSP & 0xFFFF) if ($debug);
+  }
+
+  # Get the memory address
+  my $address= ($abuswrop == SPwrite) ? (($SPhi<<8) | $SPlo) :
+               ($abuswrop == ARwrite) ? (($ARhi<<8) | $ARlo) :
+               ($abuswrop == DRwrite) ? (($DRhi<<8) | $DRlo) :
+					(($PChi<<8) | $PClo) ;
+
+  # Work out the actual bank. If the address
+  # is below $2000, it's always bank 0
+  my $realbank= ($address < 0x4000) ? 0 : $Bank;
+
+  # Get the data at that memory location
+  my $memvalue= ($address < 0x2000) ? $ROM[ $address ] : $RAM[$realbank][ $address ];
+
+  # Get the data bus value
+  my $databus=	($dbuswrop == ADhiwrite) ? ($address >> 8) :
+	       	($dbuswrop == ADlowrite) ? ($address & 0xFF) :
+	       	($dbuswrop == MEMwrite) ? $memvalue :
+		($dbuswrop == Awrite) ? $A :
+		($dbuswrop == Olowrite) ? $Olow :
+		($dbuswrop == Ohiwrite) ? $Ohigh : 0 ;
+
+  # Read from UART. Wait up to 0.5 seconds.
+  $databus = ord( readterm() ) if ($dbuswrop == UARTwrite);
+
+  if ($debug && $dbusrdop) {
+    printf("Mem[ %01x%04x ] => ", $realbank, $address) if ($dbuswrop == MEMwrite);
+    printf("ADhi %04x => ", $address) if ($dbuswrop == ADhiwrite);
+    printf("ADlo %04x => ", $address) if ($dbuswrop == ADlowrite);
+    print("UART => ") if ($dbuswrop == UARTwrite);
+    print("Areg => ") if ($dbuswrop == Awrite);
+    print("Olow => ") if ($dbuswrop == Olowrite);
+    print("Ohigh => ") if ($dbuswrop == Ohiwrite);
+    printf("dbus %02x ", $databus);
+  }
+
+  # Do the ALU operation.
+  my $aluresult= $ALUROM->[ ($carry<<20) | ($aluop<<16) | ($databus<<8) | $B ];
+
+  # Store any ALU result, and extract
+  # the carry flag from the ALU result.
+  # Split the 16-bit ALU result into two 8-bit values.
+  if ($dbusrdop == Oread) {
+    $Olow = $aluresult & 0xff;
+    $Ohigh = ($aluresult >> 8) & 0xff;
+    $carry= ($aluresult>>CSHIFT) & 1;
+  }
+
+  # Extract the jump flags
+  if ($dbuswrop == Ohiwrite) {
+    $zero= ($Ohigh>>ZSHIFT) & 1;
+    $negative= ($Ohigh>>NSHIFT) & 1;
+    $notzero= ($Ohigh>>NOTZSHIFT) & 1;
+    $negorzero= ($Ohigh>>NEGORZEROSHIFT) & 1;
+    $zeronneg= ($Ohigh>>ZERONNEGSHIFT) & 1;
+    $notnnotz= ($Ohigh>>NOTNNOTZSHIFT) & 1;
+  }
+
+  if ($debug && ($dbusrdop == Oread)) {
+    printf("B %02x %s %04x ", $B, $ALUop[$aluop], $aluresult);
+  }
+
+
+  # Write to any data bus reader
+  $Bank= $databus&0x7 if ($dbusrdop == Bankread);
+  $ARhi= $databus if ($dbusrdop == ARhiread);
+  $ARlo= $databus if ($dbusrdop == ARloread);
+  $DRhi= $databus if ($dbusrdop == DRhiread);
+  $DRlo= $databus if ($dbusrdop == DRloread);
+  $SPhi= $databus if ($dbusrdop == SPhiread);
+  $SPlo= $databus if ($dbusrdop == SPloread);
+  $A= $databus if ($dbusrdop == Aread);
+  $B= $databus if ($dbusrdop == Bread);
+  $IR= $databus if ($dbusrdop == IRread);
+  $RAM[$realbank][ $address ] = $databus if ($dbusrdop == MEMread);
+
+  # Output to UART
+  if ($dbusrdop == UARTread) {
+    print($OUT chr($databus)); $|=1;            # Flush the output
+  }
+
+  if ($debug) {
+    print("=> Bank ") if ($dbusrdop == Bankread);
+    print("=> ARhi ") if ($dbusrdop == ARhiread);
+    print("=> ARlo ") if ($dbusrdop == ARloread);
+    print("=> DRhi ") if ($dbusrdop == DRhiread);
+    print("=> DRlo ") if ($dbusrdop == DRloread);
+    print("=> SPhi ") if ($dbusrdop == SPhiread);
+    print("=> SPlo ") if ($dbusrdop == SPloread);
+    print("=> A ") if ($dbusrdop == Aread);
+    print("=> B ") if ($dbusrdop == Bread);
+    print("=> IR ") if ($dbusrdop == IRread);
+    print("=> I/O ") if ($dbusrdop == UARTread);
+    printf("=> Mem[ %01x%04x ] ", $realbank, $address) if ($dbusrdop == MEMread);
+  }
+
+  # Increment the AR
+  if ($dbuswrop == ARincr) {
+    my $tempAR= ($ARhi<<8) | $ARlo;
+    $tempAR++; 
+    $ARhi= ($tempAR >> 8) & 0xFF;
+    $ARlo= $tempAR & 0xFF;
+    printf("%04x => AR ", $tempAR & 0xFFFF) if ($debug);
+  }
+
+  # Increment the DR
+  if ($dbusrdop == DRincr) {
+    my $tempDR= ($DRhi<<8) | $DRlo;
+    $tempDR++; 
+    $DRhi= ($tempDR >> 8) & 0xFF;
+    $DRlo= $tempDR & 0xFF;
+    printf("%04x => DR ", $tempDR & 0xFFFF) if ($debug);
+  }
+
+  # Increment the PC and the phase. We use a temporary 16-bit PC.
+  my $tempPC= ($PChi<<8) | $PClo;
+  $tempPC++ if ($pcincr==1);
+  $phase= ($usreset==1) ? 0 : ($phase+1) & 0xf;
+
+  # Do any jumps
+  if ($jumpena) {
+
+    if ($debug) {
+      print(" C") if ($carry);
+      print(" N") if ($negative);
+      print(" Z") if ($zero);
+      print(" NOTZ") if ($notzero);
+      print(" NOZ") if ($negorzero);
+      print(" ZNNEG") if ($zeronneg);
+      print(" NNNZ") if ($notnnotz);
+      print(" JZ: ") if ($jumpop==0);
+      print(" JN: ") if ($jumpop==1);
+      print(" JNOTZ: ") if ($jumpop==2);
+      print(" JNOZ: ") if ($jumpop==3);
+      print(" JZNNEG: ") if ($jumpop==4);
+      print(" JNNNZ: ") if ($jumpop==5);
+      print(" JNR: ") if ($jumpop==6);
+      print(" JNT: ") if ($jumpop==7);
+      print(" ");
+    }
+    if ($jumpop==0 && $zero) {
+      $tempPC= $address;
+      printf("=> %04x", $address) if ($debug);
+    }
+    if ($jumpop==1 && $negative) {
+      $tempPC= $address;
+      printf("=> %04x", $address) if ($debug);
+    }
+    if ($jumpop==2 && $notzero) {
+      $tempPC= $address;
+      printf("=> %04x", $address) if ($debug);
+    }
+    if ($jumpop==3 && $negorzero) {
+      $tempPC= $address;
+      printf("=> %04x", $address) if ($debug);
+    }
+    if ($jumpop==4 && $zeronneg) {
+      $tempPC= $address;
+      printf("=> %04x", $address) if ($debug);
+    }
+    if ($jumpop==5 && $notnnotz) {
+      $tempPC= $address;
+      printf("=> %04x", $address) if ($debug);
+    }
+  }
+
+  # Exit if the PC goes to $FFFF
+  print("\n") if ($debug);
+  last if ($tempPC==0xFFFF);
+
+  # Split the temporary PC and save back to the two PC registers
+  $PChi= ($tempPC >> 8) & 0xFF;
+  $PClo= $tempPC & 0xFF;
+}
+
+# Clean up and exit
+restore_terminal();

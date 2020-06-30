@@ -1,0 +1,12 @@
+RCS
+*.bak
+fp-info-cache
+*.hex
+*.rom
+a.out
+test.vcd
+*sch-bak
+*pcb-bak
+*bck
+Bom
+Old

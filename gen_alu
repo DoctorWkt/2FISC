@@ -1,0 +1,159 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Data::Dumper;
+use Storable;
+
+# Script to generate the contents of the ALU ROM.
+# (C) 2019 Warren Toomey, GPL3
+#
+# The ROM takes these 21 bits of input.
+# - bit 20,    carry-in
+# - bit 19-16, the ALU operation
+# - bit 15-8,  the A value
+# - bit 7-0,   the B value
+#
+# There are 15 bits of output. Flag bits are active high.
+# - bit  14,   not negative and not zero
+# - bit  13,   zero or not negative
+# - bit  12,   negative or zero
+# - bit  11,   not zero
+# - bit  10,   negative
+# - bit   9,   zero
+# - bit   8,   carry
+# - bit 7-0,   the result
+#
+# All other output bits are unused and not wired up.
+
+use constant NOTNNOTZ  => 0x4000;    # The not negative and not zero flag
+use constant ZERONNEG  => 0x2000;    # The zero or not negative flag
+use constant NEGORZERO => 0x1000;    # The negative or zero flag
+use constant NOTZERO   => 0x0800;    # The not zero flag
+use constant NEGFLAG   => 0x0400;    # The negative flag
+use constant ZEROFLAG  => 0x0200;    # The zero flag
+use constant CARRYFLAG => 0x0100;    # The carry flag
+use constant CMASK   => 0x01ff; # Mask to keep carry bit from add/sub operations
+use constant NOCMASK => 0x00ff; # Mask to get rid of any accidental carry bit
+
+# Global variables to make writing the anonymous subs easier
+our ( $A, $B, $carryin, $result );    # A and B inputs, carry-in and ALU result
+
+# The ROM contents to be generated
+my @ROM;
+
+# Arithmetic shift $A to the right $B times. Slow but works.
+sub ASR {
+    $result = $A;
+    my $msb = $result & 0x80;
+    for ( my $i = 0 ; $i < $B ; $i++ ) {
+        $result = $result >> 1;
+        $result |= $msb;
+        last if ( $i == 8 );
+    }
+}
+
+# Array of subroutines, some anonymous, which calculate the result
+# given the A and B values
+my @Opsub = (
+    sub { $result = ( $A + $B + $carryin ) & CMASK; },    # A+B
+    sub { $result = ( $A - $B - $carryin ) & CMASK; },    # A-B
+    sub { $result = $A & $B; },                           # A AND B
+    sub { $result = $A | $B; },                           # A OR B
+    sub { $result = $A ^ $B; },                           # A XOR B
+    sub { $result = ( $A << $B ) & CMASK; },              # A<<B
+    \&ASR,                                                # A>>B arithmetic
+    sub { $result = ( $A * $B ) & 0xffff; },              # A*B, 16 result bits
+    sub { $result = ( $B == 0 ) ? 0 : int( $A / $B ); },  # A/B
+    sub { $result = ( $B == 0 ) ? 0 : int( $A % $B ); },  # A%B
+    sub { $result = $A + $carryin; },                     # A with carry-in
+    sub { $result = ( $A - $B - $carryin ) & CMASK; },    # A-B comparison
+    sub { $result = 0; },                                 # 0
+    sub { $result = ( $A + 1 ) & CMASK; },                # A+1
+    sub { $result = ( $A - 1 ) & CMASK; },                # A-1
+    sub { $result = ( ~$A ) & NOCMASK; },                 # NOT A
+);
+
+### MAIN PROGRAM ###
+
+# Loop across all possible ALU inputs
+foreach $carryin ( 0 .. 1 ) {
+    foreach my $aluop ( 0x0 .. 0xf ) {
+
+        # Cache the ALU op subroutine and if it's a div or mod
+        my $opsub = $Opsub[$aluop];
+
+        foreach $A ( 0x00 .. 0xff ) {
+
+            # Cache A's sign
+            my $asign = $A & 0x80;
+
+            foreach $B ( 0x00 .. 0xff ) {
+                my $bsign = $B & 0x80;
+
+                # Run the subroutine to calculate the result.
+                # At this point we have an active high carry flag in bit 8
+                # and an active high negative bit in bit 7.
+                $opsub->();
+
+                # Do the flags but not for the multiply instruction
+                if ( $aluop != 7 ) {
+
+                    # Add on any zero flag
+                    my $zero = ( ( $result & NOCMASK ) == 0 );
+                    $result |= ZEROFLAG if ($zero);
+
+                    # Add on any negative flag
+                    my $negative = $result & 0x80;
+                    $result |= NEGFLAG if ($negative);
+
+                    # Add on any not zero flag
+                    $result |= NOTZERO if ( !$zero );
+
+                    # Add on any negative or zero flag
+                    $result |= NEGORZERO if ( $negative || $zero );
+
+                    # Add on any zero or not negative flag
+                    $result |= ZERONNEG if ( $zero || !$negative );
+
+                    # Add on any not negative and not zero flag
+                    $result |= NOTNNOTZ if ( !$negative && !$zero );
+                }
+
+                # Special case. For the A-B comparison operation, replace
+                # the low eight bits with B's value. This allows to get
+                # B's value out on the data bus.
+                $result = ( $result & 0xff00 ) | $B if ( $aluop == 0xb );
+
+                # Put the result into the ROM
+                $ROM[ ( $carryin << 20 ) | ( $aluop << 16 ) | ( $A << 8 ) | $B ]
+                  = $result;
+            }
+        }
+    }
+}
+
+# Write ROM out in hex for Verilog
+open( my $OUT, ">", "alu.rom" ) || die("Can't write to alu.rom: $!\n");
+for my $i ( 0 .. ( 2**21 - 1 ) ) {
+    printf( $OUT "%x ", $ROM[$i] ? $ROM[$i] : 0 );
+    print( $OUT "\n" ) if ( ( $i % 8 ) == 7 );
+}
+close($OUT);
+
+# If there is a ROMs directory, also write out eight minipro binary ROM file,
+# each of which has little-endian 16-bit values.
+if ( -d "ROMs" ) {
+    my $offset   = 0;
+    my $lastposn = 2**18 - 1;
+    foreach my $bank ( 0 .. 7 ) {
+        open( $OUT, '>:raw', "ROMs/alu$bank.rom" ) or die "Unable to open: $!";
+        for my $i ( $offset .. $lastposn ) {
+            print( $OUT pack( "v", $ROM[$i] ? $ROM[$i] : 0 ) );
+        }
+        close($OUT);
+        $offset   += 2**18;
+        $lastposn += 2**18;
+    }
+}
+
+exit(0);

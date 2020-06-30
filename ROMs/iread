@@ -1,0 +1,4 @@
+#!/bin/sh
+minipro -p AT28C64B -r fred.bin
+bin2hex fred.bin fred.hex
+rm fred.bin

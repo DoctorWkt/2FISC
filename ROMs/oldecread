@@ -1,0 +1,12 @@
+#!/bin/sh
+minipro -p 'M27C1024 @DIP40' -y -r decode.bin
+bin2hex decode.bin decode.hex
+rm decode.bin
+
+# Now check against the actual decode ROM
+bin2hex ../27Cucode.rom realdecode.hex
+cmp realdecode.hex decode.hex
+if [ "$?" -eq 1 ]
+then echo "ROM doesn't match ./27Cucode.rom"
+     diff realdecode.hex decode.hex
+fi

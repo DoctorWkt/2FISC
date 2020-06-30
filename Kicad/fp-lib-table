@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name FISC2)(type KiCad)(uri ${KIPRJMOD}/lib_sch/FISC2.pretty)(options "")(descr ""))
+)

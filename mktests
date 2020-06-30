@@ -1,0 +1,27 @@
+#!/bin/sh
+# Make the output files for each test
+
+# Build our ROMs if needed
+if [ ! -f ucode.rom ]
+then make
+fi
+
+for i in Examples/example*s
+do
+   # Work out the output and error file names
+   out=`echo $i | sed 's/example/out.example/'`
+   err=`echo $i | sed 's/example/err.example/'`
+
+   if [ ! -f "$out" -a ! -f "$err" ]
+   then
+     ./cas $i 2> "$err"
+     # If the err file is empty
+     if [ ! -s "$err" ]
+     then
+        rm -f "$err"
+        ./cas $i
+	./csim > "$out"
+      fi
+   fi
+   rm -f instr.rom
+done

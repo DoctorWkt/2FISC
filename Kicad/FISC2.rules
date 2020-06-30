@@ -1,0 +1,91 @@
+
+(rules PCB FISC2
+  (snap_angle 
+    fortyfive_degree
+  )
+  (autoroute_settings
+    (fanout off)
+    (autoroute on)
+    (postroute on)
+    (vias on)
+    (via_costs 50)
+    (plane_via_costs 5)
+    (start_ripup_costs 100)
+    (start_pass_no 17)
+    (layer_rule F.Cu
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.7)
+    )
+    (layer_rule B.Cu
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 1.6)
+    )
+  )
+  (rule
+    (width 250.0)
+    (clear 200.2)
+    (clear 125.0 (type smd_to_turn_gap))
+    (clear 50.0 (type smd_smd))
+  )
+  (padstack "Via[0-1]_800:400_um"
+    (shape
+      (circle F.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 800.0 0.0 0.0)
+    )
+    (attach off)
+  )
+  (via 
+    "Via[0-1]_800:400_um" "Via[0-1]_800:400_um" default
+  )
+  (via 
+    "Via[0-1]_800:400_um-kicad_default" "Via[0-1]_800:400_um" "kicad_default"
+  )
+  (via_rule
+    default "Via[0-1]_800:400_um"
+  )
+  (via_rule
+    "kicad_default" "Via[0-1]_800:400_um-kicad_default"
+  )
+  (class default
+    (clearance_class default)
+    (via_rule default)
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class "kicad_default"
+    Clk Lo adr8 adr15 adr9 adr14 adr10 adr13
+    adr11 adr12 ~PCread ~PCwrite ~Clkbar ~PCincr adr0 adr7
+    adr1 adr6 adr2 adr5 adr3 adr4 ~RAMena ~SPwrite
+    ~SPhiread d7 StkOp0 ~SPcarry ~SPloread StkOp1 ~ARwrite ~MEMwrite
+    ~MEMread ~Awrite /Data/b0 /Data/b1 /Data/b2 /Data/b3 /Data/b4 /Data/b5
+    /Data/b6 /Data/b7 Cout Cin /Data/alu0 /Data/alu1 /Data/alu2 /Data/alu3
+    /Data/alu4 /Data/alu5 /Data/alu6 /Data/alu7 ~ADhiwrite ~ADlowrite /Control/ir0 /Control/ir1
+    /Control/ir2 /Control/ir3 /Control/ir4 /Control/ir5 /Control/ir6 /Control/ir7 ~uSreset ~UARTwrite
+    DbWr2 DbWr1 DbWr0 NorZout NotZout Nout Zout ~Jmpena
+    ~TXready ~RXready NNNZout ZNNout AbWr1 AbWr0 ~UARTread DbRd3
+    DbRd2 DbRd1 DbRd0 ALUop2 ALUop1 ALUop0 ALUop3 Hi
+    seq0 seq1 seq2 seq3 ~Reset IRread Bread Aread
+    adr18 adr17 adr16 "Net-(U1-Pad14)" Bankread ~ROMena ~DRwrite Oread
+    /Data/alu15 ~Ohiwrite ~Olowrite ~ARhiread ~ARloread ~DRhiread ~DRloread ~ARincr
+    ARcarry DRcarry /Data/alu12 /Data/alu13 /Data/alu14 /Data/alu9 /Data/alu10 /Data/alu11
+    d0 DbWr3 MEMread UARTread Jmpena ~DRincr "Net-(U22-Pad13)"
+    (clearance_class "kicad_default")
+    (via_rule kicad_default)
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+)

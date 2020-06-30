@@ -1,0 +1,66 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+# Build our ROMs if needed
+if [ ! -f ucode.rom ]
+then make
+fi
+
+# Try to use each example source file
+for i in Examples/example*s
+do
+   # Work out the output and error file names
+   out=`echo $i | sed 's/example/out.example/'`
+   err=`echo $i | sed 's/example/err.example/'`
+   trial=`echo $i | sed 's/.*example/trial/'`
+   # echo $i $out $err $trial
+
+   # We can't do anything if there's no file to test against
+   if [ ! -f "$out" -a ! -f "$err" ]
+   then echo "Can't run test on $i, no output or error file!"
+
+   # Output file: assemble the source, run it and
+   # capture the output, and compare it against
+   # the known-good output
+   else if [ -f "$out" ]
+        then
+	  # Print the test name, assemble it
+          echo -n $i
+          ./cas $i
+          ./csim > $trial
+
+  	  # Compare this agains the correct output
+          cmp -s "$out" "$trial"
+
+	  # If different, announce failure
+          # and print out the difference
+          if [ "$?" -eq "1" ]
+          then echo ": failed"
+            diff -c "$out" "$trial"
+            echo
+
+	  # No failure, so announce success
+          else echo ": OK"
+          fi
+
+   # Error file: assemble the source and
+   # capture the error messages. Compare
+   # against the known-bad output. Same
+   # mechanism as before
+   else if [ -f "$err" ]
+        then
+          echo -n $i
+          ./cas $i 2> "$trial"
+          cmp -s "$err" "$trial"
+          if [ "$?" -eq "1" ]
+          then echo ": failed"
+            diff -c "$err" "$trial"
+            echo
+          else echo ": OK"
+          fi
+        fi
+     fi
+   fi
+   rm -f instr.rom $trial
+done

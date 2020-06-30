@@ -1,0 +1,11 @@
+(sym_lib_table
+  (lib (name UM245R)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/UM245R.lib)(options "")(descr ""))
+  (lib (name MC27C322)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/M27C322-100F1.lib)(options "")(descr ""))
+  (lib (name AT27C1024)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/AT27C1024-70PU.lib)(options "")(descr ""))
+  (lib (name 74xx)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/74xx.lib)(options "")(descr ""))
+  (lib (name Memory_RAM)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/Memory_RAM.lib)(options "")(descr ""))
+  (lib (name Memory_EPROM)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/Memory_EPROM.lib)(options "")(descr ""))
+  (lib (name 74LS593)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/74LS593.lib)(options "")(descr ""))
+  (lib (name DS1233)(type Legacy)(uri /home/wkt/ownCloud/2FISC/Kicad/lib_sch/DS1233-10+.lib)(options "")(descr ""))
+  (lib (name FISC2-rescue)(type Legacy)(uri ${KIPRJMOD}/FISC2-rescue.lib)(options "")(descr ""))
+)
