@@ -1390,3 +1390,52 @@ arithmetic? Especially as I can read/write the
 two AR registers and the two DR registers. I can't
 think how at present, but it's something to
 investigate.
+
+## Wed  1 Jul 13:06:24 AEST 2020
+
+Back to the breadboard. I'm now trying the second databus reader demux, the
+one that's a 3:8 decoder but I use the clock and the `DbRd3` bit to
+enable the output. Looks like it's going to work:
+
+![](Figs/db_read2_01jul.png)
+
+We need rising clock edges mid cycle and that what we see. The first one is
+the `IRread` signal. Then I do:
+
+```
+D5 dbrd2:
+	MEMwrite IRread PCincr
+	Noread
+        A-B Bankread
+        A&B Aread
+        A|B Bread Awrite
+        A^B IRread
+        A<<B MEMread
+        A>>B Oread MEMwrite
+        A*B UARTread
+        A/B Jmpena
+        uSreset
+```
+
+I don't have enough analyser pins deployed to catch the `Jmpena` signal
+but I'm sure it will be there. 74HCT240: delay from input to output is 10nS.
+
+I also checked the carry:
+
+![](Figs/carry_01jul.png)
+
+That's the reset line, clock, input and output.
+74HCT74: clock to output change is 12.5nS.
+
+Next up is the Instruction ROM, the AT28C64B device that Alan is worried
+about. I wired the low four address bits up to the '161 counter and wired
+the others high.
+
+![](Figs/irom_01jul.png)
+
+The trace shows the fastest counter pin and three data bit outputs.
+You can definitely see it glitch as it finds the data value internally.
+Also, the output delays are not synchronised. The worst I saw with
+this small sample of 16 addresses is a 35nS propagation delay. Alan
+did say that it is possible that some data values might require
+a delay of up to 150nS.
