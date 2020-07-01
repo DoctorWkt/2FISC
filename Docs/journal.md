@@ -1282,3 +1282,83 @@ It all looks good.
 While I've got the 74HCT139 on the board, here's a measurement for it.
 74HCT139 input to output change: 12.5nS.
 
+## Wed  1 Jul 07:19:30 AEST 2020
+
+I can't believe that I don't have (and didn't order) any 74HCT154 4:16
+demux chips! I must have ordered the '541s and thought they were '154s at
+the same time. So, for `~SPloread`, I am using a 74HCT138 3:8 demux on
+the breadboard. Here's a measurement for it.
+74HCT138 input to output change: 12.5nS.
+
+I've put the 74LS493 up/down counter on the breadboard, and wired it up
+to the two `StkOp` lines and the `~SPloread` line. I've wired a constant
+input of $02. So it's the moment of truth time. Can I get the '469 to
+load the value of 2? Here is what value it should have:
+
+```
+D1 stkops:
+	MEMwrite IRread PCincr
+	Noread
+        SPloread		# 2
+        SPwrite
+        Stkincr			# 3
+        SPwrite
+        Stkincr			# 4
+        SPwrite
+        Stkdecr SPwrite		# 3
+        Stkdecr SPwrite		# 2
+        SPloread SPwrite	# 2
+        SPwrite
+        uSreset			# 3
+	default			# 4
+	default			# 5
+	default			# 6?
+```
+
+I am not decoding `~uSreset` so the microsequencer will count from 0 to 15.
+Those last three microinstructions are all zero which by default is a
+stack increment operation.
+
+And here is what I see, the lines from top to bottom are `Clk`, `Q0`, `Q1`,
+`Q2` and `Q3`.
+
+![](Figs/stkop_01jul.png)
+
+And that's a beautiful thing as I can see the chip loading the value $2,
+incrementing and decrementing. I'm not seeing the increment to 6 but I'm
+not worried by that. I'm very happy to see the 5 change to a 2 right on
+the left-hand side of the figure.
+
+Now, I need to augment this to have a `Clkbar`, so I've put a 74HCT240
+octal inverter on the breadboard. 74HCT240: input to output is 10nS.
+
+I've tied the bottom three 74LS493 inputs to some Decode ROM outputs
+just to show that I can load different values. Here's the microcode
+with that I think is the register's output value:
+
+```
+D1 stkops:
+	MEMwrite IRread PCincr
+	Noread
+        SPloread		# 0 load
+        SPwrite
+        Stkincr			# 1
+        SPwrite
+        Stkincr			# 2
+        SPwrite
+        Stkdecr SPwrite		# 1
+        Stkdecr SPwrite		# 0
+        SPloread SPwrite	# 2 load
+        SPwrite
+        uSreset			# 3
+	default			# 4
+	default			# 5
+	default	
+```
+
+And here's what I see with the logic analyser:
+
+![](Figs/stkop2_01jul.png)
+
+So, yes, it is loading different values at different times.
+Also, 74LS493 load to output change: 12.5uS.

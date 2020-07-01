@@ -98,7 +98,7 @@ The data bus is 8 bits wide and provides the path for data movement. This includ
 
 ## The ALU
 
-![](Figs/alu.png)
+![](Figs/aludesign.png)
 
 The ALU provides 16 operations on two data inputs, of which one is always
 the B register. The other data input is the data bus itself. This allows

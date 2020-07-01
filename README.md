@@ -19,7 +19,7 @@ The design uses 29 chips and has 8K of ROM, 336K of available RAM and a UART.
 The overall design of the CPU is covered in
 [Docs/arch_overview.md](Docs/arch_overview.md), and some details
 of the hardware implementation are in 
-[Docs/fisc_implementation.md](Docs/fisc_implementation.md).
+[Docs/fisc2_implementation.md](Docs/fisc2_implementation.md).
 
 ## Implementation
 

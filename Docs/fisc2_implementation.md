@@ -545,7 +545,7 @@ eight outputs are held low.
 
 Here is the cleverness. This demux needs to generate the rising
 edge lines to control those data bus readers that need them. `~G2B`
-is already low, so now we need to deal with `G1 and `~G2A`.
+is already low, so now we need to deal with `G1` and `~G2A`.
 
 `G1` is tied to the highest of the four data bus reader bits from
 the Decode ROM. This means the demux output can only go high when
