@@ -1187,53 +1187,10 @@ Now that I have OHireg, can I use the `asr` ALUop to pass B's
 value out on the high 8 bits? That would mean that I now have
 _two_ spare ALUops! And, what to do with them?!
 
-Time to do a proposal table I think:
-
-Op  | Purpose (Low Bits) | High Bits
----:|:------------------:|:---------
- 0  |  A + B		 |  Flags
- 1  |  A - B		 |  Flags
- 2  |  A AND B		 |
- 3  |  A OR B		 |
- 4  |  A XOR B		 |
- 5  |  A << B		 |  High bits
- 6  |  A >> B arithmetic |
- 7  |  A * B		 |  High bits
- 8  |  A / B		 |  A % B
- 9  |  spare		 |
- A  |  A + carry	 |  Flags
- B  |  spare		 |
- C  |  0		 |  Flags
- D  |  A + 1		 |  Flags
- E  |  A - 1		 |  Flags
- F  |  NOT A		 |
-
-Heh, looking at it like this, I could move
-some of the logic operations to the high bits
-as well!
-
-Op  | Low Bits           | High Bits
----:|:------------------:|:---------
- 0  |  0		 |  Flags
- 1  |  A + B		 |  Flags
- 2  |  A - B		 |  Flags
- 3  |  A + 1		 |  Flags
- 4  |  A - 1		 |  Flags
- 5  |  A + carry	 |  Flags
- 6  |  A * B		 |  High bits
- 7  |  A / B		 |  A % B
- 8  |  A AND B		 |  NOT A
- 9  |  A OR B		 |  A XOR B
- A  |  A << B		 |  High bits
- B  |  A >> B arithmetic |  A >> B logical
- C  |  spare		 |  spare
- D  |  spare		 |  spare
- E  |  spare		 |  spare
- F  |  spare		 |  spare
 
 ## Tue 30 Jun 17:55:06 AEST 2020
 
-I'll combe back to the ALU, but my DIP TTL chips are here. So I'm doing
+I'll come back to the ALU, but my DIP TTL chips are here. So I'm doing
 some timing measurements. First up,
 
 74HC161 propagation time clk to out: 12.5nS.
@@ -1290,7 +1247,7 @@ the same time. So, for `~SPloread`, I am using a 74HCT138 3:8 demux on
 the breadboard. Here's a measurement for it.
 74HCT138 input to output change: 12.5nS.
 
-I've put the 74LS493 up/down counter on the breadboard, and wired it up
+I've put the 74LS469 up/down counter on the breadboard, and wired it up
 to the two `StkOp` lines and the `~SPloread` line. I've wired a constant
 input of $02. So it's the moment of truth time. Can I get the '469 to
 load the value of 2? Here is what value it should have:
@@ -1332,7 +1289,7 @@ the left-hand side of the figure.
 Now, I need to augment this to have a `Clkbar`, so I've put a 74HCT240
 octal inverter on the breadboard. 74HCT240: input to output is 10nS.
 
-I've tied the bottom three 74LS493 inputs to some Decode ROM outputs
+I've tied the bottom three 74LS469 inputs to some Decode ROM outputs
 just to show that I can load different values. Here's the microcode
 with that I think is the register's output value:
 
@@ -1361,7 +1318,7 @@ And here's what I see with the logic analyser:
 ![](Figs/stkop2_01jul.png)
 
 So, yes, it is loading different values at different times.
-Also, 74LS493 load to output change: 12.5uS.
+Also, 74LS469 load to output change: 12.5uS.
 
 Here's the breadboard at present:
 
@@ -1397,3 +1354,39 @@ something to watch out for.
 
 Therefore, I'm going to set freeroute running twice (simultaneously)
 and get some tracks laid down again.
+
+## Wed  1 Jul 11:47:08 AEST 2020
+
+Back to the ALU redesign. I had this idea. We can now
+capture two lots of 8-bit results for each ALU operation.
+Not all of them have to be flags. I could move
+some of the logic operations to the high bits
+as they can get stored in OHireg. So, this is
+possible:
+
+Op  | Low Bits           | High Bits
+---:|:------------------:|:---------
+ 0  |  0		 |  Flags (Z for jump)
+ 1  |  A + B		 |  Flags (Carry)
+ 2  |  A - B		 |  Flags (Carry and jumps)
+ 3  |  A + 1		 |  Flags (Carry)
+ 4  |  A - 1		 |  Flags (Carry)
+ 5  |  A + carry	 |  Flags (Carry)
+ 6  |  A * B		 |  High bits of multiply
+ 7  |  A / B		 |  A % B
+ 8  |  A AND B		 |  B
+ 9  |  A OR B		 |  A XOR B
+ A  |  NOT A		 |  NOT B
+ B  |  A << B		 |  High bits of shift
+ D  |  A >> B arithmetic |  A >> B logical
+ D  |  spare		 |  spare
+ E  |  spare		 |  spare
+ F  |  spare		 |  spare
+
+This leaves six 8-bit operations that I can
+add. I'm just wondering: would there be any
+ALU operations that would help when doing 16-bit
+arithmetic? Especially as I can read/write the
+two AR registers and the two DR registers. I can't
+think how at present, but it's something to
+investigate.

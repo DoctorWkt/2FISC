@@ -1,7 +1,7 @@
 (export (version D)
   (design
     (source /home/wkt/ownCloud/2FISC/Kicad/FISC2.sch)
-    (date "Tue 30 Jun 2020 08:33:31 AEST")
+    (date "Wed 01 Jul 2020 10:41:48 AEST")
     (tool "Eeschema 5.1.6+dfsg1-1~bpo10+1")
     (sheet (number 1) (name /) (tstamps /)
       (title_block

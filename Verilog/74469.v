@@ -2,7 +2,7 @@
 // (c) Warren Toomey, GPL3
 
 /* verilator lint_off DECLFILENAME */
-module ttl_74469 #(parameter WIDTH = 8, DELAY_RISE = 55, DELAY_FALL = 55)
+module ttl_74469 #(parameter WIDTH = 8, DELAY_RISE = 15, DELAY_FALL = 15)
 (
   input CK,			// Rising edge clock
   input LD_bar,			// Active low: load the register

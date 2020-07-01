@@ -3,7 +3,7 @@
 
 /* verilator lint_off DECLFILENAME */
 module ttl_74138 #(parameter WIDTH_OUT = 8, WIDTH_IN = $clog2(WIDTH_OUT),
-					DELAY_RISE = 21, DELAY_FALL = 21)
+					DELAY_RISE = 15, DELAY_FALL = 15)
 (
   input Enable1_bar,
   input Enable2_bar,

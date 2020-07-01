@@ -126,7 +126,8 @@ module ttlfisc (i_clk, reset, PCval);
   wire [WordSize-1+4:0] Decodeindex= { IRval, uSval };
 
   // The Decode ROM
-  rom #(.AddressSize(12), .WordSize(AddressSize), .Filename("../ucode.rom"))
+  rom #(.AddressSize(12), .WordSize(AddressSize), .Filename("../ucode.rom"),
+	.DELAY_RISE(25), .DELAY_FALL(25))
         Decoder(Decodeindex, controlbus, 1'b0, 1'b0);
 
   // Output from the Decode ROM

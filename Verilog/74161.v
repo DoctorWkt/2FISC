@@ -2,7 +2,7 @@
 // (c) Tim Rudy, GPL3
 
 /* verilator lint_off DECLFILENAME */
-module ttl_74161 #(parameter WIDTH = 4, DELAY_RISE = 22, DELAY_FALL = 22)
+module ttl_74161 #(parameter WIDTH = 4, DELAY_RISE = 18, DELAY_FALL = 18)
 (
   input Clear_bar,
   input Load_bar,

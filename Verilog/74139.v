@@ -4,7 +4,7 @@
 /* verilator lint_off DECLFILENAME */
 module ttl_74139 #(parameter BLOCKS = 2, WIDTH_OUT = 4,
 		WIDTH_IN = $clog2(WIDTH_OUT),
-		DELAY_RISE = 25, DELAY_FALL = 25)
+		DELAY_RISE = 18, DELAY_FALL = 18)
 (
   input [BLOCKS-1:0] Enable_bar,
   input [WIDTH_IN*BLOCKS-1:0] A_2D,
