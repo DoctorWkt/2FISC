@@ -1362,3 +1362,38 @@ And here's what I see with the logic analyser:
 
 So, yes, it is loading different values at different times.
 Also, 74LS493 load to output change: 12.5uS.
+
+Here's the breadboard at present:
+
+![](Figs/20200701_102511.jpg)
+
+We have, from left to right:
+
+ + 74LS469 up/down/counter
+ + 74HCT138 3:8 demux
+ + AT27C1024 Decode ROM
+ + 74HCT240 inverter below the ROM
+ + 74HCT161 4-bit counter
+ + 1MHz oscillator
+ + DS1233 reset device above the oscillator
+
+## Wed  1 Jul 10:34:22 AEST 2020
+
+Yesterday on the TTLers forum I asked about possible fan out problems and
+Alan and Alastair gave me some feedback. I tried to work out the high/low
+input and output currents for all the devices on the data bus, and I made
+a spreadsheet for it. I think I've concluded that I'm OK for the data bus.
+Yes there are eight LS readers but all the other readers are CMOS (so low
+input current required), and all the bus writers have enough output current
+to drive all the bus readers.
+
+I think that means that I don't need another 74HCT541 buffer just to drive
+the LS devices. I also asked Alan if he would review my design and he's
+agreed to, so hopefully he will spot any glaring mistakes I've made. So far
+he's worried that the AT28C64B Instruction ROM delay is 150nS, and at
+3.57MHz half a clock cycle is under 140nS. I think I'm OK because I
+didn't have any troubles with it on CSCvon8 running at 3.57, but it's
+something to watch out for.
+
+Therefore, I'm going to set freeroute running twice (simultaneously)
+and get some tracks laid down again.
