@@ -1,0 +1,8 @@
+#!/bin/sh
+for i in ../Examples/example*.s
+do j=`echo $i | sed 's/\.\.\///'`
+   echo $j
+   cd ..; ./cas $j
+   cd Verilog; make clean; make
+done
+make clean

@@ -640,7 +640,7 @@ do an `A != B` conditional jump.
 
 There is one jump which I haven't discussed yet, and that's
 the unconditional jump. To make this happen, I use that
-ALU operation that always generates a zero outut; this also
+ALU operation that always generates a zero output; this also
 always sets the Zero flag. Therefore, the microcode sequence
 to jump to address $XXXX is:
 

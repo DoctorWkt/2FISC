@@ -1,4 +1,4 @@
-// TTL version of the FISC CPU
+// TTL version of the FISC2 CPU
 // (c) 2020 Warren Toomey, GPL3
 
 `default_nettype none
@@ -315,7 +315,7 @@ module ttlfisc (i_clk, reset, PCval);
   // The Jump logic. We take as inputs the JumpOp from the IR, several
   // active high status lines from the OH register, and two status lines
   // from the UART. In this version, the two UART lines are set low.
-  wire [7:0] jumpInput= { 1'b0, 1'b0, Ohival[6:1] };
+  wire [7:0] jumpInput= { 1'b0, 1'b0, databus[6:1] };
   wire Jmpunused;
   ttl_74151 jumpLogic(Jmpena, jumpInput, JumpOp, Jmpunused, PCread);
 

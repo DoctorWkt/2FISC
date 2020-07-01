@@ -1399,7 +1399,7 @@ enable the output. Looks like it's going to work:
 
 ![](Figs/db_read2_01jul.png)
 
-We need rising clock edges mid cycle and that what we see. The first one is
+We need rising clock edges mid cycle and that's what we see. The first one is
 the `IRread` signal. Then I do:
 
 ```
@@ -1418,7 +1418,7 @@ D5 dbrd2:
 ```
 
 I don't have enough analyser pins deployed to catch the `Jmpena` signal
-but I'm sure it will be there. 74HCT240: delay from input to output is 10nS.
+but I'm sure it will be there. 74HCT238: delay from input to output is 10nS.
 
 I also checked the carry:
 
@@ -1439,3 +1439,20 @@ Also, the output delays are not synchronised. The worst I saw with
 this small sample of 16 addresses is a 35nS propagation delay. Alan
 did say that it is possible that some data values might require
 a delay of up to 150nS.
+
+## Wed  1 Jul 16:18:29 AEST 2020
+
+Alan's looking at the design and I'm getting some good feedback. He's
+not happy with the 1K pullup resistors and recommends 22K ones instead.
+I'll definitely have to try that out. He doesn't think that the PCB
+layout is crucial. He doesn't like my register control line names, or
+my flags names!
+
+Alan did point out something that I hadn't fully realised and there some
+potential there. The jump logic is now effectively wired to the data bus,
+because the OHireg writes to the data bus and that's where the jump logic
+reads from. Implication: we don't have to read the flags from the OHireg;
+in fact, we can read them straight from the data bus.
+
+I've just updated the Verilog version to reflect this. All the tests
+are still OK.
