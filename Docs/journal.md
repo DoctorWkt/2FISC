@@ -1513,3 +1513,20 @@ the ROM outputs. It should be 0 to 6, then nine lots of 7.
 And that's what I see on the output of the ROM. So it does look like I
 can use 20K or 22K resistors instead of 1K resistors as the pullups.
 I think that's the only change that I need to make.
+
+## Thu  2 Jul 19:35:51 AEST 2020
+
+I thought I'd let the auto place mechanism in KiCad put the components on
+the board. So I cleared all the tracks, moved everything off except the
+UART and let KiCad put them back. Then I spaced them all out evenly
+over the PCB. Then I let freerouter have a go at the board. Once it had
+routed the tracks, it had an initial via count of 346! That's pretty
+terrible compared to my initial ~260 vias. In that case, I won't alter
+the PCB at all now. I do still need to do the copper pour on the board.
+
+## Thu  2 Jul 21:56:10 AEST 2020
+
+I've changed the resistors to 22K on the schematic, poured the copper, done
+the DRC, made the gerbers, sent them to JLCPCB and I've ordered the PCBs!
+Now I need to find out what components I'm still missing and order some
+of those. It's starting to get expensive.

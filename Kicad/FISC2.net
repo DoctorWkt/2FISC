@@ -1,7 +1,7 @@
 (export (version D)
   (design
     (source /home/wkt/ownCloud/2FISC/Kicad/FISC2.sch)
-    (date "Wed 01 Jul 2020 10:41:48 AEST")
+    (date "Thu 02 Jul 2020 21:39:48 AEST")
     (tool "Eeschema 5.1.6+dfsg1-1~bpo10+1")
     (sheet (number 1) (name /) (tstamps /)
       (title_block
@@ -97,7 +97,7 @@
       (sheetpath (names /Memory/) (tstamps /5E1AD168/))
       (tstamp 5ED3980A))
     (comp (ref R1)
-      (value 1K)
+      (value 22K)
       (footprint Resistor_SMD:R_0603_1608Metric_Pad1.05x0.95mm_HandSolder)
       (datasheet ~)
       (fields
@@ -106,7 +106,7 @@
       (sheetpath (names /Memory/) (tstamps /5E1AD168/))
       (tstamp 5ED39850))
     (comp (ref R2)
-      (value 1K)
+      (value 22K)
       (footprint Resistor_SMD:R_0603_1608Metric_Pad1.05x0.95mm_HandSolder)
       (datasheet ~)
       (fields
@@ -115,7 +115,7 @@
       (sheetpath (names /Memory/) (tstamps /5E1AD168/))
       (tstamp 5ED39856))
     (comp (ref R3)
-      (value 1K)
+      (value 22K)
       (footprint Resistor_SMD:R_0603_1608Metric_Pad1.05x0.95mm_HandSolder)
       (datasheet ~)
       (fields
