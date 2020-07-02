@@ -1456,3 +1456,60 @@ in fact, we can read them straight from the data bus.
 
 I've just updated the Verilog version to reflect this. All the tests
 are still OK.
+
+Ah, a slight panic then. Alan pointed out that the CY62148 datasheet
+says it's a 3.6V device, not a 5V device. After I spent some time
+looking for a replacement part, I checked my parts purchase and found
+that I'd bought a CY62148GN-45 which is a 5V device. So I'm OK!
+
+## Thu  2 Jul 08:23:07 AEST 2020
+
+I'll try this for the testing of the bank switch circuit with the different
+resistors. The bottom three '161 output lines will be inputs to the bank switch
+register. The top one will be the output enable line, so half the time the
+register should be disabled. The 1MHz clock will be the register's clock input,
+so the register should change value each time the counter changes.
+
+I will feed this to my EEPROM (as I can't pre-program the RAM). The first
+eight values will be 00 to 07. I'll monitor the ROM's output. With the
+register `~OE` tied high I should see all eight values. With the 
+register `~OE` tied to the top counter bit, I have no idea what I should
+see for the second half of the values. Then when I add in the resistors,
+I should see 07 for all of the the second half of the values.
+
+## Thu  2 Jul 17:54:04 AEST 2020
+
+I've wired the above up. Here is the output of the register with the `~OE`
+pin tied low:
+
+![](Figs/banksig01_02jul.png)
+
+Top signal is the clock, the rest are the three output bits. It's outputting
+the count of the '161 fine. Now I'll wire the `~OE` high and make the
+output tri-state:
+
+![](Figs/banksig02_02jul.png)
+
+So all the outputs appear low but they are actually hi-Z. Now I'll wire
+the `~OE` to the top bit of the '161 counter:
+
+![](Figs/banksig03_02jul.png)
+
+It counts for eight clocks then goes hi-Z for the next eight clocks. Fine.
+Now let's try some 22K resistors on those outputs. Actually, I only have
+20K resistors:
+
+![](Figs/banksig04_02jul.png)
+
+Looks the same, unsurprisingly. I wonder what my DSLogic Pro thinks is
+the threshold between low/high for a) the high-Z and b) the pullup
+resistors. For the high-Z, I'm seeing glitches around the 1.7V threshold.
+With the pullup resistors, about 4.4V. This is with the register outputs
+connected to the ROM inputs, so it's a realistic test. Now let's see what
+the ROM outputs. It should be 0 to 6, then nine lots of 7.
+
+![](Figs/banksig05_02jul.png)
+
+And that's what I see on the output of the ROM. So it does look like I
+can use 20K or 22K resistors instead of 1K resistors as the pullups.
+I think that's the only change that I need to make.
