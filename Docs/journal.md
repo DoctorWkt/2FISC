@@ -1530,3 +1530,36 @@ I've changed the resistors to 22K on the schematic, poured the copper, done
 the DRC, made the gerbers, sent them to JLCPCB and I've ordered the PCBs!
 Now I need to find out what components I'm still missing and order some
 of those. It's starting to get expensive.
+
+## Fri  3 Jul 10:01:44 AEST 2020
+
+You know, I forgot to check all the footprints on the PCB before I ordered
+it. In particular, I didn't check the CY62148GN footprint. I just did and
+it is slightly too narrow. It's not completely bad, but I might have to tin
+the pads and the IC legs, then sit the chip on the pads and heat each leg
+in turn to get them to "take".
+
+I might try this out with a spare SOIC chip and the FISC board I've stuffed
+up.
+
+Here is the list of components that I definitely still need to buy:
+
+ + three 22K resistors
+ + SOIC HCT238
+ + SOIC HCT74
+ + SOIC HCT154
+
+Given the freight charge, perhaps I should buy another set of components?
+Also, maybe a 2MHz oscillator. I'll think about it.
+
+Now, a long-term roadmap of things to do (apart from build and test the
+FISC2 PCB), in no particular order:
+
+ + write the boot ROM a la CSCvon8
+ + add more instructions
+ + choose the spare ALU operations
+ + port the acwj C compiler
+ + write a C version of the simulator
+ + design a file system and system calls
+ + add library functions to the ROM
+ + make the C compiler self-compiling on the actual hardware
