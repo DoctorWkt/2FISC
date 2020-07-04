@@ -121,11 +121,33 @@ sub tokenise_line {
   return(@tokenlist);
 }
 
-# Parse an operand from a line and return its value and size
+# Parse an operand from a line and return its value and "type".
+# Type is one of:
+# 	'b': 1 byte
+# 	'w': 2 byte word
+# 	'l': 4 byte long
+# 	'p': 2 byte pointer
+# 	'x': X register
+# 	'y': Y register
+# 	's': Stack pointer
+# 	'S': Stack pointer plus offset
+# 
 sub parse_operand {
     my $operand = shift;
 
-    if ( $operand =~ m{^'(.)'$} ) {    # 1-byte char const
+    if ( $operand =~ m{^x$}i ) {	# X register
+        return ( 0, 'x' );
+    }
+
+    if ( $operand =~ m{^y$}i ) {	# Y register
+        return ( 0, 'y' );
+    }
+
+    if ( $operand =~ m{^sp$}i ) {	# Stack pointer
+        return ( 0, 's' );
+    }
+
+    if ( $operand =~ m{^'(.)'$} ) {    	# 1-byte char const
         my $char = $1;
         return ( ord($char), 'b' );
     }
@@ -170,10 +192,10 @@ sub parse_complicated_operand {
 	return($val, 'p');
     }
 
-    if ( $operand =~ m{^sp\+(\d+)} ) {		# sp + decimal offset
+    if ( $operand =~ m{^sp\+(\d+)}i ) {		# sp + decimal offset
 	my $offset= $1;
 	($val, $size)= parse_operand($offset);  # Mainly for error checking
-	return($val, 's');
+	return($val, 'S');
     }
 
     if ( $operand =~ m{^(.*)\+(\d+)} ) {	# something + decimal offset
@@ -357,7 +379,7 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
                 $MEM[ $posn++ ] = $op->[0] & 0xff;
                 $instsize += 1;
             }
-            if ( ($op->[1] eq 'w') || ($op->[1] eq 's')
+            if ( ($op->[1] eq 'w') || ($op->[1] eq 'S')
 				   || ($op->[1] eq 'p')) {
                 $MEM[ $posn++ ] = $op->[0] & 0xff;
                 $MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;

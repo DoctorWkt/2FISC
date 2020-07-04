@@ -11,6 +11,7 @@ bang:	.equ '!'
 	movw fred, kim; out fred; out fred+1
 	ldb fred, '\n'; out fred
 
+	ldw sp, $0000			# Initialise the stack pointer
 	pushw kim			# Push the value at kim on stack
 	pusha jane			# Push jane's address on stack
 	jsr puts
