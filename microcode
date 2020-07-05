@@ -118,6 +118,17 @@ define ALUW_WW(OP):
 	DRwrite Olowrite MEMread	# Mem[ DR ]= O
 	uSreset
 
+# Perform an ALU operation on two words that DR/AR already point to
+define ALUW_DRAR(OP):
+	ARwrite MEMwrite Bread		# B= Mem[ AR ]
+	DRwrite MEMwrite OP Oread	# O= Mem[ DR ] + B
+	DRwrite Olowrite MEMread	# Mem[ DR ]= O
+	ARincr DRincr			# Increment AR and DR
+	ARwrite MEMwrite Bread		# B= Mem[ AR ]
+	DRwrite MEMwrite OP Oread	# O= Mem[ DR ] + B
+	DRwrite Olowrite MEMread	# Mem[ DR ]= O
+	uSreset
+
 # Load DR and AR from the instruction
 define LOAD_DRAR():
 	MEMwrite DRloread PCincr
@@ -183,6 +194,22 @@ define ALUB_WY(OP):
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite OP Oread
 	ARwrite Olowrite MEMread
+	uSreset
+
+# ALU operations on a byte destination at SP+offset and Y
+define ALUB_SY(OP):
+	A-Bcomp Oread				# Temporarily store B
+	Olowrite ARloread			# in ARlo
+	Zero Oread				# Add SP+offset into DR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite DRloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite DRhiread
+	ARwrite ADlowrite Bread			# Get B back
+	DRwrite MEMwrite OP Oread		# Do the ALU operation
+	Olowrite DRwrite MEMread		# And save it
 	uSreset
 
 # 00-0F instructions: special purpose
@@ -278,7 +305,8 @@ define ALUB_WY(OP):
 
 # Clear the carry bit
 0E clc:
-	CLC() uSreset
+	CLC()
+	uSreset
 
 # Load the memory bank register with constant
 0F bank_b:
@@ -496,7 +524,7 @@ define ALUB_WY(OP):
 # Push a byte in memory on the stack. Destroys A register.
 3A pushb_w:
 	Stkdecr
-	LOAD_AR()				# Get the jump address in AR
+	LOAD_AR()
 	ARwrite MEMwrite Aread
 	SPwrite Awrite MEMread
 	uSreset
@@ -506,7 +534,7 @@ define ALUB_WY(OP):
 # the word on the stack is stored little endian
 3B pushw_w:
 	Stkdecr
-	LOAD_AR()				# Get the jump address in AR
+	LOAD_AR()
 	ARwrite MEMwrite Aread
 	ARincr DRincr
 	ARwrite MEMwrite Bread
@@ -883,6 +911,31 @@ A3 mov_xP:
 	DRwrite MEMwrite Aread			# Get the byte, finally
 	uSreset
 
+# Copy a byte from a SP+offset into the Y register
+A4 mov_yS:
+	Zero Oread				# Add SP+offset into DR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite DRloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite DRhiread
+	DRwrite MEMwrite Bread
+	uSreset
+
+# Copy a byte from a SP+offset into the X register
+A5 mov_xS:
+	Zero Oread				# Add SP+offset into DR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite DRloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite DRhiread
+	DRwrite MEMwrite Aread
+	uSreset
+
+
 # B0-1B: X/Y Jump instructions
 
 # Jump if X equals Y
@@ -1023,76 +1076,116 @@ D5 dbrd2:
 	A/B Jmpena
 	uSreset
 
-## 40-4F instructions: special purpose
+# ALU operations on a byte destination at SP+offset and Y
+E0 addb_Sy:
+	CLC()
+	ALUB_SY(A+B)
+	uSreset
 
-## Load A from memory with B offset
-#42 mov_a_word+b:
-#	MEMwrite ARloread PCincr		# Get the address into AR
-#	MEMwrite ARhiread PCincr
-#	CLC()					# Clear the carry
-#	ARwrite ADlowrite A+B Oread		# ARlo+B => Oreg
-#	Olowrite ARloread			# and stored into ARlo
-#	ARwrite ADhiwrite A+0 Oread		# ARhi+carry => Oreg
-#	Olowrite ARhiread			# and stored into ARhi
-#	ARwrite MEMwrite Aread			# A = $ADDR,B
-#	uSreset
-#
-## Store A to memory with B offset
-#43 mov_word+b_a:
-#	MEMwrite ARloread PCincr		# Get the address into AR
-#	MEMwrite ARhiread PCincr
-#	CLC()					# Clear the carry
-#	ARwrite ADlowrite A+B Oread		# ARlo+B => Oreg
-#	Olowrite ARloread			# and stored into ARlo
-#	ARwrite ADhiwrite A+0 Oread		# ARhi+carry => Oreg
-#	Olowrite ARhiread			# and stored into ARhi
-#	ARwrite Awrite MEMread			# $ADDR,B = A
-#	uSreset
-#
-#
-#
-## Load A from stack pointer with 16-bit offset.
-## B is destroyed
-#46 mov_a_sp+word:
-#	CLC()					# Clear the carry
-#	MEMwrite Bread PCincr			# Get the low offset in B
-#	SPwrite ADlowrite A+B Oread		# SPlo+B => Oreg
-#	Olowrite ARloread			# and stored into ARlo
-#	MEMwrite Bread PCincr			# Get the high offset in B
-#	SPwrite ADhiwrite A+B Oread		# SPhi+carry => Oreg
-#	Olowrite ARhiread			# and stored into ARhi
-#	ARwrite MEMwrite Aread			# A = $ADDR,B
-#	uSreset
-#
-## Set the stack pointer to an address
-#47 mov_sp_word: MEMwrite SPloread PCincr
-#	 MEMwrite SPhiread PCincr
-#	 uSreset
-#
-## Write A through the stack pointer with 16-bit offset.
-## B is destroyed
-#48 mov_sp+word_a:
-#	CLC()					# Clear the carry
-#	MEMwrite Bread PCincr			# Get the low offset in B
-#	SPwrite ADlowrite A+B Oread		# SPlo+B => Oreg
-#	Olowrite ARloread			# and stored into ARlo
-#	MEMwrite Bread PCincr			# Get the high offset in B
-#	SPwrite ADhiwrite A+B Oread		# SPhi+carry => Oreg
-#	Olowrite ARhiread			# and stored into ARhi
-#	ARwrite Awrite MEMread			# $ADDR,B = A
-#	uSreset
-#
-## Load A from stack pointer with constant offset.
-## B is destroyed
-#49 mov_a_sp+byte:
-#	MEMwrite Bread PCincr
-#	  CLC()					# Clear the carry
-#	  SPwrite ADlowrite A+B Oread		# SPlo+B => Oreg
-#	  Olowrite ARloread			# and stored into ARlo
-#	  SPwrite ADhiwrite A+0 Oread		# SPhi+carry => Oreg
-#	  Olowrite ARhiread			# and stored into ARhi
-#	  ARwrite MEMwrite Aread		# A = $ADDR,B
-#	   uSreset
-#
-#
-#
+E1 subb_Sy:
+	CLC()
+	ALUB_SY(A-B)
+	uSreset
+
+E2 adcb_Sy:
+	ALUB_SY(A+B)
+	uSreset
+
+E3 sbcb_Sy:
+	ALUB_SY(A-B)
+	uSreset
+
+# AND
+E4 andb_Sy:
+	ALUB_SY(A&B)
+
+# OR
+E5 orb_Sy:
+	ALUB_SY(A|B)
+
+# XOR
+E6 xorb_Sy:
+	ALUB_SY(A^B)
+
+# Logical shift left
+E7 lslb_Sy:
+	ALUB_SY(A<<B)
+
+# Arithmetic shift right
+E8 asrb_Sy:
+	ALUB_SY(A>>B)
+
+# Multiply
+E9 mulb_Sy:
+	ALUB_SY(A*B)
+
+# Divide
+EA divb_Sy:
+	ALUB_SY(A/B)
+
+# Modulo
+EB modb_Sy:
+	ALUB_SY(A%B)
+
+# Output a byte from SP+offset
+EF out_S:
+	Zero Oread				# Add SP+offset into DR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite DRloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite DRhiread
+	DRwrite MEMwrite UARTread
+	uSreset
+
+## Perform 16-bit ALU operation on the memory locations
+## already set up in the AR & DR registers.
+## Use the drar_SS first.
+# Add with no carry
+F0 addwdrar:
+	CLC()
+	ALUW_DRAR(A+B)
+
+# Subtract with no carry
+F1 subwdrar:
+	CLC()
+	ALUW_DRAR(A-B)
+
+# Add with carry
+F2 adcwdrar:
+	ALUW_DRAR(A+B)
+
+# Subtract with carry
+F3 sbcwdrar:
+	ALUW_DRAR(A-B)
+
+# AND
+F4 andwdrar:
+	ALUW_DRAR(A&B)
+
+# OR
+F5 orwdrar:
+	ALUW_DRAR(A|B)
+
+# XOR
+F6 xorwdrar:
+	ALUW_DRAR(A^B)
+
+# Load DR and AR from two SP+offset operands
+FF drar_SS:
+	Zero Oread				# Add SP+offset into DR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite DRloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite DRhiread
+	Zero Oread				# Add SP+offset into AR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite ARloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite ARhiread
+	uSreset
