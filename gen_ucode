@@ -3,12 +3,15 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-# FISC2 microcode generator, (C) 2020 Warren Toomey, GPL3 
+# FISC2 microcode generator, (C) 2020 Warren Toomey, GPL3
 #
 # Generate the ucode.rom from the microcode text file,
 # and create the opcodes file. Also generate a ROM file,
 # 27Cucode.rom which is ready to write to the read ROM
 # using minipro.
+
+# Input file handle
+my $IN;
 
 # Hash of control lines and their values
 my %Cline;
@@ -22,8 +25,11 @@ my %Opcode;
 # Hash of previously seen opnames
 my %Opname;
 
+# Hash of defined macros
+my %Macro;
+
 # Bitmask to set all active low lines off
-my $lowoffmask=0;
+my $lowoffmask = 0;
 
 # Hash of control lines to be asserted by default,
 # and hash of hashes for lines to deassert if named.
@@ -37,84 +43,151 @@ my %Mutex;
 my @ROM;
 
 # The current instruction, name and microsequence position.
-# Also, the number of instructions bytes 
-my $opcode=0;
+# Also, the number of instructions bytes
+my $opcode = 0;
 my $opname;
-my $seq=0;
-my $instrlen=0;
+my $seq      = 0;
+my $instrlen = 0;
 
 # If set, this line is placed at position 0 in each microsequence
 my $startline;
 
 # Debug flag if needed. Current line number
-my $debug=0;
-my $linenum=0;
+my $debug   = 0;
+my $linenum = 0;
 
 # Given a string with space-separated control lines, parse each
 # word, and update the ROM with the microinstruction
 sub parse_lines {
-  my ($input, $inscode, $insname)= @_;
-  my @allnames;
-  print("Parsing $input\n") if ($debug==2);
-  die("Too many uinstructions on line $linenum\n") if ($seq == 16);
+    my ( $input, $inscode, $insname ) = @_;
+    my @allnames;
+    print("Parsing $input\n") if ( $debug == 2 );
+    die("Too many uinstructions on line $linenum\n") if ( $seq == 16 );
 
-  # Build a hash with any lines to assert by default
-  my %line;
-  foreach my $l (keys(%Assert)) {
-    $line{$l}= 1;
-  }
-
-  # Build a list of control lines named on the input
-  push(@allnames, split(m{\s+}, $input));
-
-  # Check that none are mutually exclusive
-  foreach my $i (0 .. scalar(@allnames)-1) {
-    foreach my $j ($i+1 .. scalar(@allnames)-1) {
-    die("$allnames[$i] conflicts with $allnames[$j] on line $linenum\n")
-      if (defined($Mutex{ $allnames[$i] }{ $allnames[$j] }));
+    # Build a hash with any lines to assert by default
+    my %line;
+    foreach my $l ( keys(%Assert) ) {
+        $line{$l} = 1;
     }
-  }
-  
 
-  # Now add in the lines on the input, deasserting
-  # any that were already asserted
-  foreach my $l (split(m{\s+}, $input)) {
-    $line{$l}= 1;
-    next if (!defined($Deassert{$l}));
-    foreach my $deline (keys(%{ $Deassert{$l} })) {
-      delete $line{$deline};
-      print("  Deasserting $deline because of $l\n") if ($debug==2);
+    # Build a list of control lines named on the input
+    push( @allnames, split( m{\s+}, $input ) );
+
+    # Check that none are mutually exclusive
+    foreach my $i ( 0 .. scalar(@allnames) - 1 ) {
+        foreach my $j ( $i + 1 .. scalar(@allnames) - 1 ) {
+            die("$allnames[$i] conflicts with $allnames[$j] on line $linenum\n")
+              if ( defined( $Mutex{ $allnames[$i] }{ $allnames[$j] } ) );
+        }
     }
-  }
 
-  # We now have a list of lines to assert.
-  # Start with all lines off
-  my $result= $lowoffmask;
-
-  foreach my $name (keys(%line)) {
-
-    die("Unrecognised line $name on line $linenum\n")
-	if (!defined($Cline{$name}));
-
-    # Set the named line in the result
-    printf("  %s: %04x => ", $name, $result) if ($debug==2);
-    if ($Cislow{$name}) {
-      $result ^= $Cline{$name};
-    } else {
-      $result |= $Cline{$name};
+    # Now add in the lines on the input, deasserting
+    # any that were already asserted
+    foreach my $l ( split( m{\s+}, $input ) ) {
+        $line{$l} = 1;
+        next if ( !defined( $Deassert{$l} ) );
+        foreach my $deline ( keys( %{ $Deassert{$l} } ) ) {
+            delete $line{$deline};
+            print("  Deasserting $deline because of $l\n") if ( $debug == 2 );
+        }
     }
-    printf("%04x\n", $result) if ($debug==2);
 
-    # Increment the instruction length if we have a PCincr
-    $instrlen++ if ($name eq "PCincr");
-    print("len $instrlen as PCincr\n") if (($debug==2) && $name eq "PCincr");
-  }
+    # We now have a list of lines to assert.
+    # Start with all lines off
+    my $result = $lowoffmask;
 
-  # Set the ROM for opcode/sequence with this value and
-  # move to the next sequence position
-  $ROM[ ($opcode << 4) | $seq ] = $result; $seq++;
-  printf("%04x: %s\t\t%s %s\n", $result, $input, $inscode, $insname)
-							if ($debug==1);
+    foreach my $name ( keys(%line) ) {
+
+        die("Unrecognised line $name on line $linenum\n")
+          if ( !defined( $Cline{$name} ) );
+
+        # Set the named line in the result
+        printf( "  %s: %04x => ", $name, $result ) if ( $debug == 2 );
+        if ( $Cislow{$name} ) {
+            $result ^= $Cline{$name};
+        } else {
+            $result |= $Cline{$name};
+        }
+        printf( "%04x\n", $result ) if ( $debug == 2 );
+
+        # Increment the instruction length if we have a PCincr
+        $instrlen++ if ( $name eq "PCincr" );
+        print("len $instrlen as PCincr\n")
+          if ( ( $debug == 2 ) && $name eq "PCincr" );
+    }
+
+    # Set the ROM for opcode/sequence with this value and
+    # move to the next sequence position
+    $ROM[ ( $opcode << 4 ) | $seq ] = $result;
+    $seq++;
+    printf( "%04x: %s\t\t%s %s\n", $result, $input, $inscode, $insname )
+      if ( $debug == 1 );
+}
+
+# Parse a macro definition
+sub parse_macro {
+    my ( $name, $args ) = @_;
+    die("Macro $name redefined on line $linenum\n")
+      if ( defined( $Macro{$name} ) );
+
+    # Split the comma-separated list of arguments and save them.
+    # Also save a hash of their names.
+    $args =~ s{\s+}{}g;
+    my @arglist = split( /,/, $args );
+    @{ $Macro{$name}{arglist} } = @arglist;
+    foreach my $a (@arglist) { $Macro{$name}{argname}{$a} = 1; }
+
+    # Now read in each line until the first blank line
+    while (<$IN>) {
+        chomp;
+        $linenum++;
+        s{#.*}{};     # Lose comments
+        s{^\s+}{};    # Lose leading whitespace
+        s{\s+$}{};    # Lose trailing whitespace
+        last if (m{^$});
+        push( @{ $Macro{$name}{line} }, $_ );
+    }
+}
+
+# Expand a macro definition
+sub expand_macro {
+    my ( $name, $args ) = @_;
+    die("Macro $name unknown on line $linenum\n")
+      if ( !defined( $Macro{$name} ) );
+
+    # Split the comma-separated list of arguments.
+    $args =~ s{\s+}{}g;
+    my @arglist = split( /,/, $args );
+
+    # Check we got the correct number of arguments
+    my $parmref   = $Macro{$name}{arglist};
+    my $argcount  = @arglist;
+    my $parmcount = @{$parmref};
+    die("Wrong # macro args: $argcount vs $parmcount, on $linenum\n")
+      if ( $argcount != $parmcount );
+
+    # Build a hash from argument to parameter
+    my %replace_arg;
+    for ( my $i = 0 ; $i < @arglist ; $i++ ) {
+        $replace_arg{ $parmref->[$i] } = $arglist[$i];
+    }
+
+    # Replace parameters with arguments on each line
+    foreach my $line ( @{ $Macro{$name}{line} } ) {
+        my @wordlist = split( m{\s+}, $line );
+        my @newwordlist;
+
+        # Replace words if they are parameters
+        foreach my $word (@wordlist) {
+            if ( defined( $replace_arg{$word} ) ) {
+                push( @newwordlist, $replace_arg{$word} );
+            } else {
+                push( @newwordlist, $word );
+            }
+        }
+        my $newline = join( ' ', @newwordlist );
+        parse_lines($newline);
+    }
 }
 
 #### MAIN PROGRAM ####
@@ -128,7 +201,7 @@ while ( ( @ARGV >= 1 ) && ( $ARGV[0] ) eq "-d" ) {
 # Overwrite the opcodes file
 open( my $OPOUT, ">", "opcodes" ) || die("Can't write to opcodes: $!\n");
 
-open(my $IN, "<", "microcode") || die("Can't read microcode: $!\n");
+open( $IN, "<", "microcode" ) || die("Can't read microcode: $!\n");
 while (<$IN>) {
     chomp;
     $linenum++;
@@ -137,101 +210,120 @@ while (<$IN>) {
     s{\s+$}{};    # Lose trailing whitespace
     next if (m{^$});    # Ignore empty lines
 
+    # Start of a macro definition
+    if (m{^define\s*(\S+)\s*\((.*)\):}) {
+        parse_macro( $1, $2 );
+        next;
+    }
+
+    # Macro line that needs expanding
+    if (m{^\s*(\S+)\s*\((.*)\)}) {
+        expand_macro( $1, $2 );
+        next;
+    }
+
     # Starting microinstruction in a microsequence
     if (m{:=\s*(.+)}) {
-      $startline= $1;
-      print("Got start line $startline\n") if ($debug==2);
-      next;
+        $startline = $1;
+        print("Got start line $startline\n") if ( $debug == 2 );
+        next;
     }
 
     # Control line definition
     if (m{^(\S+)\s*=\s*(\S+)}) {
-      my ($name, $val)= ($1, $2);
+        my ( $name, $val ) = ( $1, $2 );
 
-      # Determine if it is active low
-      # Update the low mask if it is
-      my $islow=0;
-      if ($name=~ m{^@(.*)}) {
-	$name= $1; $islow=1;
-	$lowoffmask |= hex($val);
-      }
+        # Determine if it is active low
+        # Update the low mask if it is
+        my $islow = 0;
+        if ( $name =~ m{^@(.*)} ) {
+            $name  = $1;
+            $islow = 1;
+            $lowoffmask |= hex($val);
+        }
 
-      die("Control line $name redefined on line $linenum\n")
-	if (defined($Cline{$name}));
-      $Cline{$name}= hex($val);
-      $Cislow{$name}= $islow; next;
+        die("Control line $name redefined on line $linenum\n")
+          if ( defined( $Cline{$name} ) );
+        $Cline{$name}  = hex($val);
+        $Cislow{$name} = $islow;
+        next;
     }
 
     # First line in a microsequence
-    if (m{^(\S+)\s+(\S+)\s*:\s*(.+)}) {
+    if (m{^(\S+)\s+(\S+)\s*:}) {
 
-      # Get the new opcode number, name and list of control lines
-      my $newopcode= $1; my $newopname= $2; my $linelist=$3;
-      print("\n$newopcode $newopname:\n") if ($debug==2);
-      die("Opcode $opcode redefined on line $linenum\n")
-				if (defined($Opcode{$opcode}));
-      die("Opname $newopname redefined on line $linenum\n")
-				if (defined($Opname{$newopname}));
-      $Opname{$newopname}= 1;
+        # Get the new opcode number and name
+        my $newopcode = $1;
+        my $newopname = $2;
+        print("\n$newopcode $newopname:\n") if ( $debug == 2 );
+        die("Opcode $opcode redefined on line $linenum\n")
+          if ( defined( $Opcode{$newopcode} ) );
+        die("Opname $newopname redefined on line $linenum\n")
+          if ( defined( $Opname{$newopname} ) );
+        $Opname{$newopname} = 1;
+        $Opcode{$newopcode} = 1;
 
-      # Print out the details of the last opcode
-      printf($OPOUT "%02x %d %s\n", $opcode, $instrlen, $opname) if ($seq!=0);
+        # Print out the details of the last opcode
+        printf( $OPOUT "%02x %d %s\n", $opcode, $instrlen, $opname )
+          if ( $seq != 0 );
 
-      # Replace with the new information and reset the sequence
-      $opcode= hex($newopcode); $opname= $newopname; $seq=0; $instrlen=0;
+        # Replace with the new information and reset the sequence
+        $opcode   = hex($newopcode);
+        $opname   = $newopname;
+        $seq      = 0;
+        $instrlen = 0;
 
-      # If there is a start line, parse it first
-      parse_lines($startline, $newopcode, $newopname) if (defined($startline));
-
-      # Parse the control lines
-      parse_lines($linelist, "", ""); next;
+        # If there is a start line, parse it first
+        parse_lines( $startline, $newopcode, $newopname )
+          if ( defined($startline) );
+        next;
     }
 
     # A control line which needs to be asserted by default
     if (m{^assert\s+(\S+)\s+unless\s+(.+)}) {
-      my @allnames;
-      my ($aline, $others)= ($1, $2);
-      push(@allnames, $aline);
-      die("Asserted control line $aline redefined on line $linenum\n")
-		if (defined($Assert{$aline}));
-      $Assert{$aline}= 1;
+        my @allnames;
+        my ( $aline, $others ) = ( $1, $2 );
+        push( @allnames, $aline );
+        die("Asserted control line $aline redefined on line $linenum\n")
+          if ( defined( $Assert{$aline} ) );
+        $Assert{$aline} = 1;
 
-      # Split the list of others and add $aline to each as a
-      # line to deassert
-      foreach my $l (split(/\s+/, $others)) {
-	$Deassert{$l}{$aline}=1;
-        push(@allnames, $l);
-      }
-
-      # In @allnames we have all the control line names which are mutually
-      # exclusive. Add these to the %Mutex hash
-      foreach my $i (0 .. scalar(@allnames)-1) {
-        foreach my $j ($i+1 .. scalar(@allnames)-1) {
-	  $Mutex{ $allnames[$i] }{ $allnames[$j] }= 1;
+        # Split the list of others and add $aline to each as a
+        # line to deassert
+        foreach my $l ( split( /\s+/, $others ) ) {
+            $Deassert{$l}{$aline} = 1;
+            push( @allnames, $l );
         }
-      }
-      next;
+
+        # In @allnames we have all the control line names which are mutually
+        # exclusive. Add these to the %Mutex hash
+        foreach my $i ( 0 .. scalar(@allnames) - 1 ) {
+            foreach my $j ( $i + 1 .. scalar(@allnames) - 1 ) {
+                $Mutex{ $allnames[$i] }{ $allnames[$j] } = 1;
+            }
+        }
+        next;
     }
 
     # If we get here, the line must just be a list of control lines.
     # Parse them
-    parse_lines($_, "", "");
+    parse_lines( $_, "", "" );
 }
 close($IN);
 
 # Print out the details of the last opcode
-printf($OPOUT "%02x %d %s\n", $opcode, $instrlen, $opname) if ($seq!=0);
+printf( $OPOUT "%02x %d %s\n", $opcode, $instrlen, $opname ) if ( $seq != 0 );
 close($OPOUT);
 
 # Find any instructions which were not defined and turn them into a NOP.
 # This assumes that instruction 00 is a NOP definition.
-my $irloadvalue= $ROM[0];
-my $nopvalue= $ROM[1];
-foreach my $i (0 .. 0xff) {
-  if (!defined($ROM[ ($i << 4) ])) {
-    $ROM[ ($i << 4) ] = $irloadvalue;
-    $ROM[ ($i << 4) + 1 ] = $nopvalue;
-  }
+my $irloadvalue = $ROM[0];
+my $nopvalue    = $ROM[1];
+foreach my $i ( 0 .. 0xff ) {
+    if ( !defined( $ROM[ ( $i << 4 ) ] ) ) {
+        $ROM[ ( $i << 4 ) ] = $irloadvalue;
+        $ROM[ ( $i << 4 ) + 1 ] = $nopvalue;
+    }
 }
 
 # Write the ROM out in hex
@@ -244,9 +336,9 @@ close($OUT);
 
 # Write the minipro binary ROM file, little-endian 16-bit values.
 # The ROM has 16 bits of addressing, so we have to write 2^16 values.
-open($OUT, '>:raw', '27Cucode.rom') or die "Unable to open: $!";
+open( $OUT, '>:raw', '27Cucode.rom' ) or die "Unable to open: $!";
 for my $i ( 0 .. ( 2**16 - 1 ) ) {
-    print($OUT pack("v", $ROM[$i] ? $ROM[$i] : 0 ));
+    print( $OUT pack( "v", $ROM[$i] ? $ROM[$i] : 0 ) );
 }
 close($OUT);
 

@@ -4,8 +4,13 @@ This is my working journal for the FISC2 CPU. It will (hopefully) go
 from when I first conceived of the design on paper through to soldering the
 components on a PCB and running real instructions, and beyond. I didn't write
 it for public consumption; the journal helps me keep track of what I'm doing,
-what issues I still need to address etc. Anyway, read on for weeks of
-frustration and occasional success ...
+what issues I still need to address etc.
+
+FISC2 is a continuation of the FISC CPU, so you may want to read my
+![FISC journal](https://github.com/DoctorWkt/FISC/blob/master/Docs/journal.md)
+if you are going to read this one.
+
+Anyway, read on for weeks of frustration and occasional success ...
 
 ## Sun 24 May 22:20:03 AEST 2020
 
@@ -1563,3 +1568,58 @@ FISC2 PCB), in no particular order:
  + design a file system and system calls
  + add library functions to the ROM
  + make the C compiler self-compiling on the actual hardware
+
+## Sat  4 Jul 15:44:48 AEST 2020
+
+I worked on some more instructions today, adding 'X', 'Y' and 'sp' as
+register keywords to `cas` as well. I was going to work on a `puts`
+function where the base pointer is pushed on the stack. I've just found
+out that:
+
+```
+        ldw $8000, $4342
+        pushw $8000
+```
+
+puts $42 and $43 on the stack, not $00 $80. What I also want is to push
+the pointer, not the value at the pointer. I need to do this:
+
+```
+fred:	.str "Hello there"
+	pushsomething fred	# Push base address of fred on stack
+```
+
+Do I do this by naming the instruction, or by adding a decoration to the
+operand?
+
+```
+	pushptr fred		# or
+	pushw &fred
+```
+
+## Sun  5 Jul 10:50:33 AEST 2020
+
+I went for the latter. Now that I'm trying to write `puts()`, I realise
+that I'm going to need a whole bunch of new instructions that deal with
+local variables, e.g.
+
+```
+	movw xxx, sp+1			# Move word from local to global
+	movw sp+1, xxx			# Move word from global to local
+	addw xxx, sp+1			# Add global and local
+	addw sp+1, xxx			# Add global and local
+	addw sp+1, sp+3			# Add local and local
+```
+
+Otherwise, I'll have to move stuff into the pseudo-registers, do the work
+on them and move back to the locals. That would slow things down an awful
+lot!
+
+This FISC2 CPU is a project that going to keep me going (insane?) for a
+very long time, there are just so many things that can be done. I might
+even run out of instruction positions.
+
+Now I'm wondering if I should modify `gen_ucode` to use the C pre-processor
+(or add in my own pre-processor) because of the large amounts of duplicate
+microcode. OK, I've just done this. I've added a couple of macros, but I
+haven't done the whole of the `microcode` file yet.

@@ -6,22 +6,22 @@
 # ALU operations (4 bits, 3:0).
 # These ones are set as levels at clock-start
 # and go straight to the ALU
-A+B        = 0000	# uses carry-in
-A-B        = 0001	# uses carry-in
-A&B        = 0002
-A|B        = 0003
-A^B        = 0004
-A<<B       = 0005
-A>>B       = 0006
-A*B        = 0007	# low 8-bit result
-A/B        = 0008
-A%B        = 0009
+A+B	   = 0000	# uses carry-in
+A-B	   = 0001	# uses carry-in
+A&B	   = 0002
+A|B	   = 0003
+A^B	   = 0004
+A<<B	   = 0005
+A>>B	   = 0006
+A*B	   = 0007	# low 8-bit result
+A/B	   = 0008
+A%B	   = 0009
 A+0	   = 000A	# uses carry-in
-A-Bcomp    = 000B	# no carry-in, sets flags, outputs B's value
-Zero       = 000C
-A+1        = 000D
-A-1        = 000E
-~A         = 000F
+A-Bcomp	   = 000B	# no carry-in, sets flags, outputs B's value
+Zero	   = 000C
+A+1	   = 000D
+A-1	   = 000E
+~A	   = 000F
 
 # Address bus writers (2 bits, 5:4)
 # These ones are set as levels at clock-start
@@ -32,10 +32,10 @@ DRwrite = 0030
 
 # Stack operation (2 bits, 7:6)
 # These ones are set as levels at clock-start
-Stkincr  = 0000
-Stkdecr  = 0040
-Stkhold  = 0080
-PCincr   = 00C0
+Stkincr	 = 0000
+Stkdecr	 = 0040
+Stkhold	 = 0080
+PCincr	 = 00C0
 
 # Data bus writers (4 bits, 11:8)
 # These ones are set as levels at clock-start
@@ -43,18 +43,18 @@ MEMwrite  = 0000
 ADhiwrite = 0100
 ADlowrite = 0200
 UARTwrite = 0300
-Awrite    = 0400
+Awrite	  = 0400
 Olowrite  = 0500
 Ohiwrite  = 0600
-ARincr    = 0700
-uSreset   = 0800
-DbWr9     = 0900	# unused
-DbWrA     = 0A00	# unused
-DbWrB     = 0B00	# unused
-DbWrC     = 0C00	# unused
-DbWrD     = 0D00	# unused
-DbWrE     = 0E00	# unused
-DbWrF     = 0F00	# unused
+ARincr	  = 0700
+uSreset	  = 0800
+DbWr9	  = 0900	# unused
+DbWrA	  = 0A00	# unused
+DbWrB	  = 0B00	# unused
+DbWrC	  = 0C00	# unused
+DbWrD	  = 0D00	# unused
+DbWrE	  = 0E00	# unused
+DbWrF	  = 0F00	# unused
 
 # Data bus readers (4 bits, 15:12)
 # These ones are set as levels at clock-start
@@ -90,519 +90,458 @@ assert Noread unless DRincr SPhiread SPloread ARhiread ARloread DRhiread DRlorea
 #
 START := MEMwrite IRread PCincr
 
+# Definitions of useful macros
+
+# Perform an ALU operation on two bytes in memory
+define ALUB_WW(OP):
+	MEMwrite DRloread PCincr	# Get the destination address
+	MEMwrite DRhiread PCincr
+	MEMwrite ARloread PCincr	# Get the source address
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread		# Load the source byte
+	DRwrite MEMwrite OP Oread	# Perform the operation
+	DRwrite Olowrite MEMread	# and write it to the destination
+	uSreset
+
+# Perform an ALU operation on two words in memory
+define ALUW_WW(OP):
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread 
+	DRwrite MEMwrite OP Oread
+	DRwrite Olowrite MEMread 
+	ARincr DRincr
+	ARwrite MEMwrite Bread 
+	DRwrite MEMwrite A&B Oread
+	DRwrite Olowrite MEMread 
+	uSreset 
+
+# Load DR and AR from the instruction
+define LOAD_DRAR():
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+
+# Clear carry
+define CLC():
+	Zero Oread
+
+
 # 00-0F instructions: special purpose
 
 # No operation
-00 nop: uSreset 
+00 nop:
+	uSreset 
 
 ## 01-0F: Load/store and general data movement instructions
 
 # Load memory location with byte constant $XX.
-01 ldb_wb: MEMwrite ARloread PCincr		# Get the address into AR
-        MEMwrite ARhiread PCincr
-        Zero Oread				# Ensure carry is clear
+01 ldb_wb:
+	MEMwrite ARloread PCincr		# Get the address into AR
+	MEMwrite ARhiread PCincr
+	CLC()					# Ensure carry is clear
 	MEMwrite A+0 Oread PCincr		# Load const into Oreg
 	ARwrite Olowrite MEMread		# Write to memory location
 	uSreset 
 
 # Load memory location with word constant $XXXX.
-02 ldw_ww: MEMwrite ARloread PCincr		# Get the address into AR
-        MEMwrite ARhiread PCincr
-        Zero Oread				# Ensure carry is clear
+02 ldw_ww:
+	MEMwrite ARloread PCincr		# Get the address into AR
+	MEMwrite ARhiread PCincr
+	CLC()					# Ensure carry is clear
 	MEMwrite A+0 Oread PCincr		# Load const into Oreg
-	ARwrite Olowrite MEMread 		# Write to memory location
-	ARincr DRincr                           # Increment AR and DR
+	ARwrite Olowrite MEMread		# Write to memory location
+	ARincr DRincr				# Increment AR and DR
 	MEMwrite A+0 Oread PCincr		# Load const hi bits into Oreg
 	ARwrite Olowrite MEMread		# Write to memory location
 	uSreset 
 
 # Move 8-bit byte from source to destination
-03 movb_ww: MEMwrite DRloread PCincr
-     MEMwrite DRhiread PCincr
-     MEMwrite ARloread PCincr
-     MEMwrite ARhiread PCincr
-     ARwrite MEMwrite Aread              # A= Mem[ AR ]
-     DRwrite Awrite MEMread
-     uSreset 
+03 movb_ww:
+	LOAD_DRAR()
+	ARwrite MEMwrite Aread			# A= Mem[ AR ]
+	DRwrite Awrite MEMread
+	uSreset 
 
 # Move 16-bit word from source to destination
-04 movw_ww: MEMwrite DRloread PCincr
-     MEMwrite DRhiread PCincr
-     MEMwrite ARloread PCincr
-     MEMwrite ARhiread PCincr
-     ARwrite MEMwrite Aread              # A= Mem[ AR ]
-     DRwrite Awrite MEMread              # Mem[ DR ] = A
-     ARincr DRincr                       # Increment AR and DR
-     ARwrite MEMwrite Aread              # A= Mem[ AR+1 ]
-     DRwrite Awrite MEMread		 # Mem[ DR+1 ] = A
-     uSreset 
+04 movw_ww:
+	LOAD_DRAR()
+	ARwrite MEMwrite Aread			# A= Mem[ AR ]
+	DRwrite Awrite MEMread			# Mem[ DR ] = A
+	ARincr DRincr				# Increment AR and DR
+	ARwrite MEMwrite Aread			# A= Mem[ AR+1 ]
+	DRwrite Awrite MEMread			# Mem[ DR+1 ] = A
+	uSreset 
 
 # Output byte from memory to UART
-05 out_w: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite UARTread
+05 out_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite UARTread
 	uSreset 
 
 # Output byte constant to UART
-06 out_b: MEMwrite UARTread PCincr
+06 out_b:
+	MEMwrite UARTread PCincr
 	uSreset 
 
 # Clear byte in memory
-07 clrb_w: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-	Zero Oread
+07 clrb_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
 	ARwrite Olowrite MEMread
 	uSreset 
 
 # Clear word in memory
-08 clrw_w: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-	Zero Oread
+08 clrw_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
 	ARwrite Olowrite MEMread
-	Zero Oread
+	CLC()
 	ARincr DRincr
 	ARwrite Olowrite MEMread
 	uSreset 
 
 # Compare byte at dest with byte at source
-09 cmpb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
+09 cmpb_ww:
+	LOAD_DRAR()
 	ARwrite MEMwrite Bread			# B= Mem[ AR ]
-	Zero Oread
+	CLC()
 	DRwrite MEMwrite A-Bcomp Oread
 	uSreset 
 
 # Compare 16-bit word value at dest with word at source
-0A cmpw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	Zero Oread
+0A cmpw_ww:
+	LOAD_DRAR()
+	CLC()
 	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A-B Oread 
+	DRwrite MEMwrite A-B Oread 
 	ARincr DRincr
 	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A-Bcomp Oread
+	DRwrite MEMwrite A-Bcomp Oread
 	uSreset 
 
 # Clear the carry bit
-0E clc: Zero Oread uSreset 
+0E clc:
+	CLC() uSreset 
 
 # Load the memory bank register with constant
-0F bank_b: MEMwrite Bankread PCincr
+0F bank_b:
+	MEMwrite Bankread PCincr
 	uSreset 
 
 # 10-1F: 8-bit ALU operations, two memory operands
 
 # Add with no carry
-10 addb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	Zero Oread
-	ARwrite MEMwrite Bread  	    # B= Mem[ AR ]
-        DRwrite MEMwrite A+B Oread 	    # O= Mem[ DR ] + B
-        DRwrite Olowrite MEMread 	    # Mem[ DR ]= O
-        uSreset 
+10 addb_ww:
+	CLC()
+	ALUB_WW(A+B)
 
 # Subtract with no carry
-11 subb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	Zero Oread
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A-B Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+11 subb_ww:
+	CLC()
+	ALUB_WW(A-B)
 
 # Add with carry
-12 adcb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A+B Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+12 adcb_ww:
+	ALUB_WW(A+B)
 
 # Subtract with carry
-13 sbcb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A-B Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+13 sbcb_ww:
+	ALUB_WW(A-B)
 
 # AND
-14 andb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A&B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+14 andb_ww:
+	ALUB_WW(A&B)
 
 # OR
-15 orb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A|B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+15 orb_ww:
+	ALUB_WW(A|B)
 
 # XOR
-16 xorb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A^B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+16 xorb_ww:
+	ALUB_WW(A^B)
 
 # Logical shift left
-17 lslb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A<<B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+17 lslb_ww:
+	ALUB_WW(A<<B)
 
 # Arithmetic shift right
-18 asrb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A>>B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+18 asrb_ww:
+	ALUB_WW(A>>B)
 
 # Multiply
-19 mulb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A*B Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+19 mulb_ww:
+	ALUB_WW(A*B)
 
 # Divide
-1A divb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A/B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+1A divb_ww:
+	ALUB_WW(A/B)
 
 # Modulo
-1B modb_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A%B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+1B modb_ww:
+	ALUB_WW(A%B)
 
 # Increment
-1C incb_ww: MEMwrite DRloread PCincr
+1C incb_ww:
+	MEMwrite DRloread PCincr
 	MEMwrite DRhiread PCincr
-        DRwrite MEMwrite A+1 Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+	DRwrite MEMwrite A+1 Oread 
+	DRwrite Olowrite MEMread 
+	uSreset 
 
 # Decrement
-1D decb_ww: MEMwrite DRloread PCincr
+1D decb_ww:
+	MEMwrite DRloread PCincr
 	MEMwrite DRhiread PCincr
-        DRwrite MEMwrite A-1 Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+	DRwrite MEMwrite A-1 Oread 
+	DRwrite Olowrite MEMread 
+	uSreset 
 
 # Read from UART to memory
-1E in_w: MEMwrite ARloread PCincr
-         MEMwrite ARhiread PCincr
-	 ARwrite UARTwrite MEMread 
-         uSreset 
+1E in_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite UARTwrite MEMread 
+	uSreset 
 
 # 20-2F: 16-bit ALU operations, two memory operands
 
 # Add with no carry
-20 addw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	Zero Oread
-	ARwrite MEMwrite Bread  	    # B= Mem[ AR ]
-        DRwrite MEMwrite A+B Oread 	    # O= Mem[ DR ] + B
-        DRwrite Olowrite MEMread 	    # Mem[ DR ]= O
-	ARincr DRincr                       # Increment AR and DR
-	ARwrite MEMwrite Bread  	    # B= Mem[ AR ]
-        DRwrite MEMwrite A+B Oread 	    # O= Mem[ DR ] + B
-        DRwrite Olowrite MEMread 	    # Mem[ DR ]= O
-        uSreset 
+20 addw_ww:
+	MEMwrite DRloread PCincr
+       	MEMwrite DRhiread PCincr
+       	MEMwrite ARloread PCincr
+       	MEMwrite ARhiread PCincr
+        CLC()
+       	ARwrite MEMwrite Bread          # B= Mem[ AR ]
+       	DRwrite MEMwrite A+B Oread      # O= Mem[ DR ] + B
+       	DRwrite Olowrite MEMread        # Mem[ DR ]= O
+       	ARincr DRincr                   # Increment AR and DR
+       	ARwrite MEMwrite Bread          # B= Mem[ AR ]
+       	DRwrite MEMwrite A+B Oread	# O= Mem[ DR ] + B
+       	DRwrite Olowrite MEMread        # Mem[ DR ]= O
+       	uSreset
 
 # Subtract with no carry
-21 subw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	Zero Oread
-	ARwrite MEMwrite Bread 
+21 subw_ww:
+        MEMwrite DRloread PCincr
+        MEMwrite DRhiread PCincr
+        MEMwrite ARloread PCincr
+        MEMwrite ARhiread PCincr
+        CLC()
+        ARwrite MEMwrite Bread 
         DRwrite MEMwrite A-B Oread 
         DRwrite Olowrite MEMread 
-	ARincr DRincr
-	ARwrite MEMwrite Bread 
+        ARincr DRincr
+        ARwrite MEMwrite Bread 
         DRwrite MEMwrite A-B Oread 
         DRwrite Olowrite MEMread 
-        uSreset 
+        uSreset
 
 # Add with carry
-22 adcw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A+B Oread 
-        DRwrite Olowrite MEMread 
-	ARincr DRincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A+B Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+22 adcw_ww:
+	ALUW_WW(A+B)
 
 # Subtract with carry
-23 sbcw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A-B Oread 
-        DRwrite Olowrite MEMread 
-	ARincr DRincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A-B Oread 
-        DRwrite Olowrite MEMread 
-        uSreset 
+23 sbcw_ww:
+	ALUW_WW(A-B)
 
 # AND
-24 andw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A&B Oread
-        DRwrite Olowrite MEMread 
-	ARincr DRincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A&B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+24 andw_ww:
+	ALUW_WW(A&B)
 
 # OR
-25 orw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A|B Oread
-        DRwrite Olowrite MEMread 
-	ARincr DRincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A|B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+25 orw_ww:
+	ALUW_WW(A|B)
 
 # XOR
-26 xorw_ww: MEMwrite DRloread PCincr
-	MEMwrite DRhiread PCincr
-	MEMwrite ARloread PCincr
-	MEMwrite ARhiread PCincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A^B Oread
-        DRwrite Olowrite MEMread 
-	ARincr DRincr
-	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A^B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+26 xorw_ww:
+	ALUW_WW(A^B)
 
 # Logical shift left: NOTYET
-27 lslw_ww: MEMwrite DRloread PCincr
+27 lslw_ww:
+	MEMwrite DRloread PCincr
 	MEMwrite DRhiread PCincr
 	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A<<B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+	DRwrite MEMwrite A<<B Oread
+	DRwrite Olowrite MEMread 
+	uSreset 
 
 # Arithmetic shift right: NOTYET
-28 asrw_ww: MEMwrite DRloread PCincr
+28 asrw_ww:
+	MEMwrite DRloread PCincr
 	MEMwrite DRhiread PCincr
 	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite Bread 
-        DRwrite MEMwrite A>>B Oread
-        DRwrite Olowrite MEMread 
-        uSreset 
+	DRwrite MEMwrite A>>B Oread
+	DRwrite Olowrite MEMread 
+	uSreset 
 
 # Increment:
-2C incw_w: MEMwrite DRloread PCincr
+2C incw_w:
+	MEMwrite DRloread PCincr
 	MEMwrite DRhiread PCincr
-        DRwrite MEMwrite A+1 Oread 
-        DRwrite Olowrite MEMread 
+	DRwrite MEMwrite A+1 Oread 
+	DRwrite Olowrite MEMread 
 	ARincr DRincr
-        DRwrite MEMwrite A+0 Oread 
-        DRwrite Olowrite MEMread
+	DRwrite MEMwrite A+0 Oread 
+	DRwrite Olowrite MEMread
 	uSreset 
 
 # Decrement:
-2D decw_w: MEMwrite DRloread PCincr
+2D decw_w:
+	MEMwrite DRloread PCincr
 	MEMwrite DRhiread PCincr
-        DRwrite MEMwrite A-1 Oread 
-        DRwrite Olowrite MEMread
-	Zero Oread
+	DRwrite MEMwrite A-1 Oread 
+	DRwrite Olowrite MEMread
+	CLC()
 	ARincr DRincr
 	Olowrite Bread 
-        DRwrite MEMwrite A-B Oread 
-        DRwrite Olowrite MEMread
-	Zero Oread uSreset 
+	DRwrite MEMwrite A-B Oread 
+	DRwrite Olowrite MEMread
+	CLC() uSreset 
 
 # 30-37: Jumps on 8-bit comparisons
 
 # Jump if dest equals source
-30 jeqb_www: MEMwrite DRloread PCincr
-           MEMwrite DRhiread PCincr
-	   DRwrite MEMwrite Aread 	 # Get destination value
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   ARwrite MEMwrite Bread 	 # Get source value
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr	 # Get jump address
-	   Zero Oread
-	   Awrite A-Bcomp Oread
-	   Ohiwrite ARwrite Jmpena
-	   uSreset 
+30 jeqb_www:
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	DRwrite MEMwrite Aread		# Get destination value
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread		# Get source value
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr	# Get jump address
+	CLC()
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if dest less than source
-31 jltb_www: MEMwrite DRloread PCincr
-           MEMwrite DRhiread PCincr
-	   DRwrite MEMwrite Aread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   ARwrite MEMwrite Bread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   Zero Oread
-	   Awrite A-Bcomp Oread
-	   Ohiwrite ARwrite Jmpena
-	   uSreset 
+31 jltb_www:
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	DRwrite MEMwrite Aread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if dest not equal to source
-32 jneb_www: MEMwrite DRloread PCincr
-           MEMwrite DRhiread PCincr
-	   DRwrite MEMwrite Aread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   ARwrite MEMwrite Bread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   Zero Oread
-	   Awrite A-Bcomp Oread
-	   Ohiwrite ARwrite Jmpena
-	   uSreset 
+32 jneb_www:
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	DRwrite MEMwrite Aread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if dest less than or equal to source
-33 jleb_www: MEMwrite DRloread PCincr
-           MEMwrite DRhiread PCincr
-	   DRwrite MEMwrite Aread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   ARwrite MEMwrite Bread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   Zero Oread
-	   Awrite A-Bcomp Oread
-	   Ohiwrite ARwrite Jmpena
-	   uSreset 
+33 jleb_www:
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	DRwrite MEMwrite Aread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if dest greater than or equal to source
-34 jgeb_www: MEMwrite DRloread PCincr
-           MEMwrite DRhiread PCincr
-	   DRwrite MEMwrite Aread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   ARwrite MEMwrite Bread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   Zero Oread
-	   Awrite A-Bcomp Oread
-	   Ohiwrite ARwrite Jmpena
-	   uSreset 
+34 jgeb_www:
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	DRwrite MEMwrite Aread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if dest greater than source
-35 jgtb_www: MEMwrite DRloread PCincr
-           MEMwrite DRhiread PCincr
-	   DRwrite MEMwrite Aread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   ARwrite MEMwrite Bread
-           MEMwrite ARloread PCincr
-           MEMwrite ARhiread PCincr
-	   Zero Oread
-	   Awrite A-Bcomp Oread
-	   Ohiwrite ARwrite Jmpena
-	   uSreset 
+35 jgtb_www:
+	MEMwrite DRloread PCincr
+	MEMwrite DRhiread PCincr
+	DRwrite MEMwrite Aread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite Bread
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	CLC()
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if UART not ready to transmit
-36 jnt_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-          ARwrite Jmpena uSreset 
+36 jnt_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite Jmpena uSreset 
 
 # Jump if no UART input receiveable
-37 jnr_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-          ARwrite Jmpena uSreset 
+37 jnr_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite Jmpena uSreset 
 
 # Jump to subroutine starting at given address.
 # Push the return address on the stack.
 # A gets destroyed. Must be X0 or X8 as jump if zero.
-38 jsr_w: MEMwrite ARloread PCincr		# Get the jump address in AR
+38 jsr_w:
+	MEMwrite ARloread PCincr		# Get the jump address in AR
 	MEMwrite ARhiread PCincr
 	Stkdecr
-	PCwrite ADhiwrite Aread 		# Load PChi into A
-	SPwrite Awrite MEMread 			# Save it on the stack
+	PCwrite ADhiwrite Aread			# Load PChi into A
+	SPwrite Awrite MEMread			# Save it on the stack
 	Stkdecr
-	PCwrite ADlowrite Aread 		# Load PClo into A
-	SPwrite Awrite MEMread 			# Save it on the stack
-	Zero Oread
+	PCwrite ADlowrite Aread			# Load PClo into A
+	SPwrite Awrite MEMread			# Save it on the stack
+	CLC()
 	Ohiwrite ARwrite Jmpena			# Copy AR to PC
 	uSreset
 
 ## Push and pop instructions. Choosing suitable mnemonics is hard
 
 # Push a byte constant on the stack. Destroys A register.
-39 push_b: Stkdecr
+39 push_b:
+	Stkdecr
 	MEMwrite Aread PCincr
 	SPwrite Awrite MEMread
 	uSreset 
 
 # Push a byte in memory on the stack. Destroys A register.
-3A pushb_w: Stkdecr
+3A pushb_w:
+	Stkdecr
 	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite Aread
@@ -612,7 +551,8 @@ START := MEMwrite IRread PCincr
 # Push a word in memory on the stack.
 # We have to push the high byte first to ensure
 # the word on the stack is stored little endian
-3B pushw_w: Stkdecr
+3B pushw_w:
+	Stkdecr
 	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite Aread
@@ -627,7 +567,8 @@ START := MEMwrite IRread PCincr
 # Push an address on the stack. We have to push the high
 # byte first to ensure the address on the stack is
 # stored little endian
-3C pusha_w: Stkdecr
+3C pusha_w:
+	Stkdecr
 	MEMwrite Aread PCincr
 	MEMwrite Bread PCincr
 	Awrite A-Bcomp Oread
@@ -637,66 +578,89 @@ START := MEMwrite IRread PCincr
 	uSreset 
 
 # Pop a byte from the stack to memory
-3D popb_w: MEMwrite ARloread PCincr
+3D popb_w:
+	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	SPwrite MEMwrite Aread
 	Awrite ARwrite MEMread
 	Stkincr uSreset 
 
+# Push an address on the stack. We need to
+# push the high byte first so that the
+# address ends up little endian
+3E pushw_a:
+	Stkdecr
+	MEMwrite Aread PCincr
+	MEMwrite Bread PCincr
+	A-Bcomp Oread
+	SPwrite Olowrite MEMread
+	Stkdecr
+	SPwrite Awrite MEMread
+	Stkdecr
+	uSreset
+
 # Conditional jumps on existing flags
 # Jump if equal to zero
-40 jeq_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-	  Ohiwrite ARwrite Jmpena
-	  uSreset 
+40 jeq_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if less than zero
-41 jlt_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-	  Ohiwrite ARwrite Jmpena
-	  uSreset 
+41 jlt_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if not equal to zero
-42 jne_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-	  Ohiwrite ARwrite Jmpena
-	  uSreset 
+42 jne_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if less than or equal to zero
-43 jle_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-	  Ohiwrite ARwrite Jmpena
-	  uSreset 
+43 jle_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if greater than or equal to zero
-44 jge_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-	  Ohiwrite ARwrite Jmpena
-	  uSreset 
+44 jge_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if greater than zero
-45 jgt_w: MEMwrite ARloread PCincr
-          MEMwrite ARhiread PCincr
-	  Ohiwrite ARwrite Jmpena
-	  uSreset 
+45 jgt_w:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Absolute jump. Has to be at X0 or X8
 # so that we do a jump if zero.
 # Always jump to $XXXX
-48 jmp_w: MEMwrite ARloread PCincr
+48 jmp_w:
+	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
-	Zero Oread
+	CLC()
 	Ohiwrite ARwrite Jmpena
 	uSreset 
 
 # Return from a subroutine to the address
 # previously stored on the stack.
 # Must be X0 as jump if zero.
-50 rts: SPwrite MEMwrite ARloread 		# Get low byte of address
-        Stkincr
-	SPwrite MEMwrite ARhiread 		# Get high byte of address
-        Stkincr
-	Zero Oread
+50 rts:
+	SPwrite MEMwrite ARloread		# Get low byte of address
+	Stkincr
+	SPwrite MEMwrite ARhiread		# Get high byte of address
+	Stkincr
+	CLC()
 	Ohiwrite ARwrite Jmpena			# Copy AR to PC
 	uSreset
 
@@ -704,9 +668,10 @@ START := MEMwrite IRread PCincr
 
 # Move a byte from a constant offset on the
 # stack into a memory location
-51 movb_ws: MEMwrite DRloread PCincr		# Get destination address
+51 movb_wS:
+	MEMwrite DRloread PCincr		# Get destination address
 	MEMwrite DRhiread PCincr
-	Zero Oread				# Clear carry
+	CLC()					# Clear carry
 	SPwrite ADlowrite Bread			# Get SPlo into B
 	MEMwrite A+B Oread PCincr		# Calculate SPlo+offset
 	Olowrite ARloread			# and store in ARlo
@@ -719,80 +684,96 @@ START := MEMwrite IRread PCincr
 
 # Move a word from a constant offset on the
 # stack into a memory location
-52 movw_ws: MEMwrite DRloread PCincr            # Get destination address
-        MEMwrite DRhiread PCincr
-        Zero Oread                              # Clear carry
-        SPwrite ADlowrite Bread                 # Get SPlo into B
-        MEMwrite A+B Oread PCincr               # Calculate SPlo+offset
-        Olowrite ARloread                       # and store in ARlo
-        SPwrite ADhiwrite Bread                 # Get SPhi into B
-        MEMwrite A+B Oread PCincr               # Calculate SPhi+offset
-        Olowrite ARhiread                       # and store in ARhi
-        ARwrite MEMwrite Aread                  # Load byte at that address
-        DRwrite Awrite MEMread                  # and store in the destination
+52 movw_wS:
+	MEMwrite DRloread PCincr		# Get destination address
+	MEMwrite DRhiread PCincr
+	CLC()					# Clear carry
+	SPwrite ADlowrite Bread			# Get SPlo into B
+	MEMwrite A+B Oread PCincr		# Calculate SPlo+offset
+	Olowrite ARloread			# and store in ARlo
+	SPwrite ADhiwrite Bread			# Get SPhi into B
+	MEMwrite A+B Oread PCincr		# Calculate SPhi+offset
+	Olowrite ARhiread			# and store in ARhi
+	ARwrite MEMwrite Aread			# Load byte at that address
+	DRwrite Awrite MEMread			# and store in the destination
 	ARincr DRincr
-        ARwrite MEMwrite Aread                  # Load byte at next address
-        DRwrite Awrite MEMread			# and store in the destination
+	ARwrite MEMwrite Aread			# Load byte at next address
+	DRwrite Awrite MEMread			# and store in the destination
 	uSreset
+
+# Increment a word at a constant offset
+# on the stack. NOT DONE YET
+#53 incw_S: CLC()				# Clear carry
+#	SPwrite MEMwrite A+1 Oread		# Low byte +1
+#	SPwrite Olowrite MEMread		# Write back
+#	Stkincr
+#	SPwrite MEMwrite A+0 Oread		# High byte +carry
+#	SPwrite Olowrite MEMread		# Write back
+#	Stkdecr
+#	uSreset
 
 ## Pointer instructions
 
 # Move byte value at pointer into location in memory
-58 movb_wp: MEMwrite DRloread PCincr		# Get destination address
+58 movb_wp:
+	MEMwrite DRloread PCincr		# Get destination address
 	MEMwrite DRhiread PCincr		
 	MEMwrite ARloread PCincr		# and source pointer
 	MEMwrite ARhiread PCincr
-        ARwrite MEMwrite Aread			# Get ptr low byte
+	ARwrite MEMwrite Aread			# Get ptr low byte
 	ARincr
-        ARwrite MEMwrite ARhiread 		# Get ptr high byte into AR
+	ARwrite MEMwrite ARhiread		# Get ptr high byte into AR
 	Awrite ARloread				# Get ptr low byte into AR
-        ARwrite MEMwrite Aread                  # Get the byte
-        DRwrite Awrite MEMread			# and write to destination
+	ARwrite MEMwrite Aread			# Get the byte
+	DRwrite Awrite MEMread			# and write to destination
 	uSreset
 
 # Move byte value in memory to address pointed to
-59 movb_pw: MEMwrite DRloread PCincr		# Get destination pointer
+59 movb_pw:
+	MEMwrite DRloread PCincr		# Get destination pointer
 	MEMwrite DRhiread PCincr
 	MEMwrite ARloread PCincr		# Get source address
 	MEMwrite ARhiread PCincr
-        DRwrite MEMwrite Aread                  # Get ptr low byte
+	DRwrite MEMwrite Aread			# Get ptr low byte
 	DRincr
-        DRwrite MEMwrite DRhiread               # Get ptr high byte into DR
+	DRwrite MEMwrite DRhiread		# Get ptr high byte into DR
 	Awrite DRloread				# Get ptr low byte into DR
-        ARwrite MEMwrite Aread                  # Get the byte
-        DRwrite Awrite MEMread			# and write to destination
+	ARwrite MEMwrite Aread			# Get the byte
+	DRwrite Awrite MEMread			# and write to destination
 	uSreset
 
 # Move word value at pointer into location in memory
-5A movw_wp: MEMwrite DRloread PCincr		# Get destination address
+5A movw_wp:
+	MEMwrite DRloread PCincr		# Get destination address
 	MEMwrite DRhiread PCincr		
 	MEMwrite ARloread PCincr		# and source pointer
 	MEMwrite ARhiread PCincr
-        ARwrite MEMwrite Aread                  # Get ptr low byte
+	ARwrite MEMwrite Aread			# Get ptr low byte
 	ARincr
-        ARwrite MEMwrite ARhiread               # Get ptr high byte into AR
+	ARwrite MEMwrite ARhiread		# Get ptr high byte into AR
 	Awrite ARloread				# Get ptr low byte into AR
-        ARwrite MEMwrite Aread                  # Get the low byte 
-        DRwrite Awrite MEMread			# and write to destination
+	ARwrite MEMwrite Aread			# Get the low byte 
+	DRwrite Awrite MEMread			# and write to destination
 	ARincr DRincr
-        ARwrite MEMwrite Aread                  # Get the high byte
-        DRwrite Awrite MEMread			# and write to destination
+	ARwrite MEMwrite Aread			# Get the high byte
+	DRwrite Awrite MEMread			# and write to destination
 	uSreset
 
 # Move word value in memory to address pointed to
-5B movw_pw: MEMwrite DRloread PCincr		# Get destination pointer
+5B movw_pw:
+	MEMwrite DRloread PCincr		# Get destination pointer
 	MEMwrite DRhiread PCincr
 	MEMwrite ARloread PCincr		# Get source address
 	MEMwrite ARhiread PCincr
-        DRwrite MEMwrite Aread                  # Get ptr low byte
+	DRwrite MEMwrite Aread			# Get ptr low byte
 	DRincr
-        DRwrite MEMwrite DRhiread               # Get ptr high byte into DR
+	DRwrite MEMwrite DRhiread		# Get ptr high byte into DR
 	Awrite DRloread				# Get ptr low byte into DR
-        ARwrite MEMwrite Aread                  # Get the low byte
-        DRwrite Awrite MEMread			# and write to destination
+	ARwrite MEMwrite Aread			# Get the low byte
+	DRwrite Awrite MEMread			# and write to destination
 	ARincr DRincr
-        ARwrite MEMwrite Aread                  # Get the high byte
-        DRwrite Awrite MEMread			# and write to destination
+	ARwrite MEMwrite Aread			# Get the high byte
+	DRwrite Awrite MEMread			# and write to destination
 	uSreset
 
 
@@ -800,298 +781,367 @@ START := MEMwrite IRread PCincr
 # Instructions that deal with the real internal registers
 
 # Load X with constant $XX
-80 ldb_xb: MEMwrite Aread PCincr
+80 ldb_xb:
+	MEMwrite Aread PCincr
 	uSreset 
 
 # Load Y with constant $XX
-81 ldb_yb: MEMwrite Bread PCincr
+81 ldb_yb:
+	MEMwrite Bread PCincr
 	uSreset 
 
 # Store X to memory
-82 mov_wx: MEMwrite ARloread PCincr
+82 mov_wx:
+	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite Awrite MEMread 
-        uSreset 
+	uSreset 
 
 # Store Y to memory
-83 mov_wy: MEMwrite ARloread PCincr
+83 mov_wy:
+	MEMwrite ARloread PCincr
 	 MEMwrite ARhiread PCincr
 	 Awrite A-Bcomp Oread
 	 ARwrite Olowrite MEMread 
-         uSreset 
+	 uSreset 
 
 # Load X from memory
-84 mov_xw: MEMwrite ARloread PCincr
+84 mov_xw:
+	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite Aread 
-        uSreset 
+	uSreset 
 
 # Load Y from memory
-85 mov_yw: MEMwrite ARloread PCincr
+85 mov_yw:
+	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
 	ARwrite MEMwrite Bread 
-        uSreset 
+	uSreset 
 
 # Write X to the UART
-86 out_x: Awrite UARTread 
-         uSreset 
+86 out_x:
+	Awrite UARTread 
+	uSreset 
 
 # Write Y to the UART
-87 out_y: Awrite A-Bcomp Oread
-	 Olowrite UARTread 
-         uSreset 
+87 out_y:
+	Awrite A-Bcomp Oread
+	Olowrite UARTread 
+	uSreset 
 
 # Read X from the UART
-88 in_x: UARTwrite Aread 
-         uSreset 
+88 in_x:
+	UARTwrite Aread 
+	uSreset 
 
 # Read Y from the UART
-89 in_y: UARTwrite Bread 
-         uSreset 
+89 in_y:
+	UARTwrite Bread 
+	uSreset 
 
 # Push X to the stack.
-8A push_x: Stkdecr
+8A push_x:
+	Stkdecr
 	SPwrite Awrite MEMread 
-        uSreset 
+	uSreset 
 
 # Push Y to the stack.
-8B push_y: Stkdecr
+8B push_y:
+	Stkdecr
 	Awrite A-Bcomp Oread
 	SPwrite Olowrite MEMread 
-        uSreset 
+	uSreset 
 
 # Pop X from the stack.
-8C pop_x: SPwrite MEMwrite Aread 
+8C pop_x:
+	SPwrite MEMwrite Aread 
 	Stkincr
-        uSreset 
+	uSreset 
 
 # Pop B from the stack.
-8D pop_y: SPwrite MEMwrite Bread 
+8D pop_y:
+	SPwrite MEMwrite Bread 
 	Stkincr
-        uSreset 
+	uSreset 
 
 # Initialise the Stack Pointer
-8E ldw_sw: MEMwrite SPloread PCincr
+8E ldw_sw:
+	MEMwrite SPloread PCincr
 	MEMwrite SPhiread PCincr
 	uSreset
 
 # X/Y ALU operations
 
 # Add with no carry
-90 add_xy: Zero Oread 			    # Clear the carry
-	  Awrite A+B Oread 
-	  Olowrite Aread 
-	  uSreset 
+90 add_xy:
+	CLC()					# Clear the carry
+	Awrite A+B Oread 
+	Olowrite Aread 
+	uSreset 
 
 # Subtract with no carry
-91 sub_xy: Zero Oread 			    # Clear the carry
-	  Awrite A-B Oread 
-	  Olowrite Aread 
-	  uSreset 
+91 sub_xy:
+	CLC()					# Clear the carry
+	Awrite A-B Oread 
+	Olowrite Aread 
+	uSreset 
 
 # Add with carry
-92 adc_xy: Awrite A+B Oread 
-	  Olowrite Aread 
-	  uSreset 
+92 adc_xy:
+	Awrite A+B Oread 
+	Olowrite Aread 
+	uSreset 
 
 # Subtract with carry
-93 sbc_xy: Awrite A-B Oread 
-	  Olowrite Aread 
-	  uSreset 
+93 sbc_xy:
+	Awrite A-B Oread 
+	Olowrite Aread 
+	uSreset 
 
-94 and_xy: Awrite A&B Oread
-	  Olowrite Aread 
-	  uSreset 
+94 and_xy:
+	Awrite A&B Oread
+	Olowrite Aread 
+	uSreset 
 
-95 or_xy:  Awrite A|B Oread
-	  Olowrite Aread 
-	  uSreset 
+95 or_xy:
+	Awrite A|B Oread
+	Olowrite Aread 
+	uSreset 
 
-96 xor_xy: Awrite A^B Oread
-	  Olowrite Aread 
-	  uSreset 
+96 xor_xy:
+	Awrite A^B Oread
+	Olowrite Aread 
+	uSreset 
 
-97 lsl_xy: Awrite A<<B Oread 
-	  Olowrite Aread 
-	  uSreset 
+97 lsl_xy:
+	Awrite A<<B Oread 
+	Olowrite Aread 
+	uSreset 
 
-98 asr_xy: Awrite A>>B Oread
-	  Olowrite Aread 
-	  uSreset 
+98 asr_xy:
+	Awrite A>>B Oread
+	Olowrite Aread 
+	uSreset 
 
 # Multiply X by Y. Store the low 8-bits
 # in Y, and the high 8-bits in X.
-99 mul_xy: Awrite A*B Oread 
-	   Olowrite Bread 
-	   Ohiwrite Aread 
-	   uSreset 
+99 mul_xy:
+	Awrite A*B Oread 
+	Olowrite Bread 
+	Ohiwrite Aread 
+	uSreset 
 
-9A div_xy: Awrite A/B Oread
-	   Olowrite Aread 
-	   uSreset 
+9A div_xy:
+	Awrite A/B Oread
+	Olowrite Aread 
+	uSreset 
 
-9B mod_xy: Awrite A%B Oread
-	   Olowrite Aread 
-	   uSreset 
+9B mod_xy:
+	Awrite A%B Oread
+	Olowrite Aread 
+	uSreset 
 
 # Increment X if carry is set
-9C cinc_x: Awrite A+0 Oread 
-	   Olowrite Aread 
-	   uSreset 
+9C cinc_x:
+	Awrite A+0 Oread 
+	Olowrite Aread 
+	uSreset 
 
 # Clear X register
-9D clr_x: Zero Oread
-	  Olowrite Aread 
-	  uSreset 
+9D clr_x:
+	CLC()
+	Olowrite Aread 
+	uSreset 
 
 # Increment X register
-9E inc_x: Awrite A+1 Oread
-	  Olowrite Aread 
-	  uSreset 
+9E inc_x:
+	Awrite A+1 Oread
+	Olowrite Aread 
+	uSreset 
 
 # Decrement X register
-9F dec_x: Awrite A-1 Oread
-	  Olowrite Aread 
-	  uSreset 
+9F dec_x:
+	Awrite A-1 Oread
+	Olowrite Aread 
+	uSreset 
 
 # Negate X register
-A0 neg_x: Awrite ~A Oread
-	  Olowrite Aread 
-	  uSreset 
+A0 neg_x:
+	Awrite ~A Oread
+	Olowrite Aread 
+	uSreset 
 
 # Compare X and Y
-A1 cmp_xy: Zero Oread
+A1 cmp_xy:
+	CLC()
 	Awrite A-Bcomp Oread
 	uSreset 
 
 # Copy X to Y
-A2 mov_xy: Awrite Bread 
-          uSreset 
+A2 mov_xy:
+	Awrite Bread 
+	uSreset 
+
+# Copy a byte from a pointer on the stack
+# to the X register
+A3 mov_xP:
+	CLC()					# Clear carry
+	SPwrite ADlowrite Bread			# Get SPlo into B
+	MEMwrite A+B Oread			# Add on the offset
+	Olowrite ARloread PCincr		# Save into ARlo
+	SPwrite ADhiwrite Bread			# Get SPhi into B
+	MEMwrite A+B Oread			# Add on the offset
+	Olowrite ARhiread PCincr		# Save into ARhi
+	ARwrite MEMwrite DRloread		# Get pointer low byte
+	ARincr
+	ARwrite MEMwrite DRhiread		# Get pointer high byte
+	DRwrite MEMwrite Aread			# Get the byte, finally
+	uSreset 
 
 # B0-1B: X/Y Jump instructions
 
 # Jump if X equals Y
-B0 jeq_xyw: MEMwrite ARloread PCincr
-            MEMwrite ARhiread PCincr
-	    Awrite A-Bcomp Oread
-	    Ohiwrite ARwrite Jmpena
-            uSreset 
+B0 jeq_xyw:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if X less than Y
-B1 jlt_xyw: MEMwrite ARloread PCincr
-            MEMwrite ARhiread PCincr
-	    Awrite A-Bcomp Oread
-	    Ohiwrite ARwrite Jmpena
-            uSreset 
+B1 jlt_xyw:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if X is not equal to Y
-B2 jne_xyw: MEMwrite ARloread PCincr
-            MEMwrite ARhiread PCincr
-	    Awrite A-Bcomp Oread
-	    Ohiwrite ARwrite Jmpena
-            uSreset 
+B2 jne_xyw:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if X is less than or equal to Y
-B3 jle_xyw: MEMwrite ARloread PCincr
-            MEMwrite ARhiread PCincr
-	    Awrite A-Bcomp Oread
-	    Ohiwrite ARwrite Jmpena
-            uSreset 
+B3 jle_xyw:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if X is greater than or equal to Y
-B4 jge_xyw: MEMwrite ARloread PCincr
-            MEMwrite ARhiread PCincr
-	    Awrite A-Bcomp Oread
-	    Ohiwrite ARwrite Jmpena
-            uSreset 
+B4 jge_xyw:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # Jump if X is greater than Y
-B5 jgt_xyw: MEMwrite ARloread PCincr
-            MEMwrite ARhiread PCincr
-	    Awrite A-Bcomp Oread
-	    Ohiwrite ARwrite Jmpena
-            uSreset 
+B5 jgt_xyw:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	Awrite A-Bcomp Oread
+	Ohiwrite ARwrite Jmpena
+	uSreset 
 
 # C0-CF instructions: Mem= Mem op Y
-C0 adc_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A+B Oread 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C1 sbc_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A-B Oread 
-        ARwrite Olowrite MEMread 
-        uSreset 
-
-C2 and_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A&B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C3 or_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A|B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C4 xor_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A^B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C5 lsl_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A<<B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C6 asr_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A>>B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C7 mul_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A*B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C8 div_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A/B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-C9 mod_wy: MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A%B 
-	ARwrite Olowrite MEMread 
-	uSreset 
-
-CA add_wy: Zero Oread 
+C0 adc_wy:
 	MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A+B Oread 
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A+B Oread 
 	ARwrite Olowrite MEMread 
 	uSreset 
 
-CB sub_wy: Zero Oread 
+C1 sbc_wy:
 	MEMwrite ARloread PCincr
-        MEMwrite ARhiread PCincr
-        ARwrite MEMwrite A-B Oread 
-        ARwrite Olowrite MEMread 
-        uSreset 
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A-B Oread 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C2 and_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A&B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C3 or_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A|B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C4 xor_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A^B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C5 lsl_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A<<B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C6 asr_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A>>B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C7 mul_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A*B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C8 div_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A/B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+C9 mod_wy:
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A%B 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+CA add_wy:
+	CLC() 
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A+B Oread 
+	ARwrite Olowrite MEMread 
+	uSreset 
+
+CB sub_wy:
+	CLC() 
+	MEMwrite ARloread PCincr
+	MEMwrite ARhiread PCincr
+	ARwrite MEMwrite A-B Oread 
+	ARwrite Olowrite MEMread 
+	uSreset 
 
 ## DX instructions: for breadboard testing
 ## the control logic
 
 # Check that PCincr drops as required
-D0 pcincr: Noread
+D0 pcincr:
+	Noread
 	PCincr
 	Noread
 	PCincr
@@ -1099,7 +1149,8 @@ D0 pcincr: Noread
 	uSreset
 
 # Stack operations
-D1 stkops: Noread
+D1 stkops:
+	Noread
 	SPloread
 	SPwrite
 	Stkincr
@@ -1113,7 +1164,8 @@ D1 stkops: Noread
 	uSreset
 
 # Address bus writing
-D2 abwr: Noread
+D2 abwr:
+	Noread
 	PCwrite
 	ARwrite
 	SPwrite
@@ -1121,7 +1173,8 @@ D2 abwr: Noread
 	uSreset
 
 # Data bus writing
-D3 dbwr: Noread
+D3 dbwr:
+	Noread
 	MEMwrite
 	ADhiwrite
 	ADlowrite
@@ -1133,7 +1186,8 @@ D3 dbwr: Noread
 	uSreset
 
 # Databus reads: lines at cycle start
-D4  dbrd1: Noread
+D4 dbrd1:
+	Noread
 	DRincr
 	A-B SPhiread
 	A&B SPloread SPwrite
@@ -1145,7 +1199,8 @@ D4  dbrd1: Noread
 	A/B uSreset
 
 # Databus reads: lines at mid-cycle
-D5 dbrd2: Noread
+D5 dbrd2:
+	Noread
 	A-B Bankread
 	A&B Aread
 	A|B Bread Awrite
@@ -1159,68 +1214,73 @@ D5 dbrd2: Noread
 ## 40-4F instructions: special purpose
 
 ## Load A from memory with B offset
-#42 mov_a_word+b: MEMwrite ARloread PCincr		# Get the address into AR
-#	   MEMwrite ARhiread PCincr
-#	   Zero Oread 			# Clear the carry
-#	   ARwrite ADlowrite A+B Oread  	# ARlo+B => Oreg
-#	   Olowrite ARloread 			# and stored into ARlo
-#	   ARwrite ADhiwrite A+0 Oread  	# ARhi+carry => Oreg
-#	   Olowrite ARhiread 			# and stored into ARhi
-#	   ARwrite MEMwrite Aread 		# A = $ADDR,B
-#           uSreset 
+#42 mov_a_word+b:
+#	MEMwrite ARloread PCincr		# Get the address into AR
+#	MEMwrite ARhiread PCincr
+#	CLC()					# Clear the carry
+#	ARwrite ADlowrite A+B Oread		# ARlo+B => Oreg
+#	Olowrite ARloread			# and stored into ARlo
+#	ARwrite ADhiwrite A+0 Oread		# ARhi+carry => Oreg
+#	Olowrite ARhiread			# and stored into ARhi
+#	ARwrite MEMwrite Aread			# A = $ADDR,B
+#	uSreset 
 #
 ## Store A to memory with B offset
-#43 mov_word+b_a: MEMwrite ARloread PCincr		# Get the address into AR
-#	   MEMwrite ARhiread PCincr
-#	   Zero Oread  			# Clear the carry
-#	   ARwrite ADlowrite A+B Oread 	# ARlo+B => Oreg
-#	   Olowrite ARloread 			# and stored into ARlo
-#	   ARwrite ADhiwrite A+0 Oread 	# ARhi+carry => Oreg
-#	   Olowrite ARhiread 			# and stored into ARhi
-#	   ARwrite Awrite MEMread 		# $ADDR,B = A
-#           uSreset 
+#43 mov_word+b_a:
+#	MEMwrite ARloread PCincr		# Get the address into AR
+#	MEMwrite ARhiread PCincr
+#	CLC()					# Clear the carry
+#	ARwrite ADlowrite A+B Oread		# ARlo+B => Oreg
+#	Olowrite ARloread			# and stored into ARlo
+#	ARwrite ADhiwrite A+0 Oread		# ARhi+carry => Oreg
+#	Olowrite ARhiread			# and stored into ARhi
+#	ARwrite Awrite MEMread			# $ADDR,B = A
+#	uSreset 
 #
 #
 #
 ## Load A from stack pointer with 16-bit offset.
 ## B is destroyed
-#46 mov_a_sp+word: Zero Oread 		# Clear the carry
-#	     MEMwrite Bread PCincr			# Get the low offset in B
-#	     SPwrite ADlowrite A+B Oread 	# SPlo+B => Oreg
-#	     Olowrite ARloread 			# and stored into ARlo
-#	     MEMwrite Bread PCincr			# Get the high offset in B
-#	     SPwrite ADhiwrite A+B Oread 	# SPhi+carry => Oreg
-#	     Olowrite ARhiread 			# and stored into ARhi
-#	     ARwrite MEMwrite Aread 		# A = $ADDR,B
-#             uSreset 
+#46 mov_a_sp+word:
+#	CLC()					# Clear the carry
+#	MEMwrite Bread PCincr			# Get the low offset in B
+#	SPwrite ADlowrite A+B Oread		# SPlo+B => Oreg
+#	Olowrite ARloread			# and stored into ARlo
+#	MEMwrite Bread PCincr			# Get the high offset in B
+#	SPwrite ADhiwrite A+B Oread		# SPhi+carry => Oreg
+#	Olowrite ARhiread			# and stored into ARhi
+#	ARwrite MEMwrite Aread			# A = $ADDR,B
+#	uSreset 
 #
 ## Set the stack pointer to an address
 #47 mov_sp_word: MEMwrite SPloread PCincr
-#        MEMwrite SPhiread PCincr
-#        uSreset 
+#	 MEMwrite SPhiread PCincr
+#	 uSreset 
 #
 ## Write A through the stack pointer with 16-bit offset.
 ## B is destroyed
-#48 mov_sp+word_a: Zero Oread 		# Clear the carry
-#	     MEMwrite Bread PCincr			# Get the low offset in B
-#	     SPwrite ADlowrite A+B Oread     # SPlo+B => Oreg
-#             Olowrite ARloread                   # and stored into ARlo
-#	     MEMwrite Bread PCincr			# Get the high offset in B
-#             SPwrite ADhiwrite A+B Oread     # SPhi+carry => Oreg
-#             Olowrite ARhiread                   # and stored into ARhi
-#	     ARwrite Awrite MEMread 		# $ADDR,B = A
-#             uSreset 
+#48 mov_sp+word_a:
+#	CLC()					# Clear the carry
+#	MEMwrite Bread PCincr			# Get the low offset in B
+#	SPwrite ADlowrite A+B Oread		# SPlo+B => Oreg
+#	Olowrite ARloread			# and stored into ARlo
+#	MEMwrite Bread PCincr			# Get the high offset in B
+#	SPwrite ADhiwrite A+B Oread		# SPhi+carry => Oreg
+#	Olowrite ARhiread			# and stored into ARhi
+#	ARwrite Awrite MEMread			# $ADDR,B = A
+#	uSreset 
 #
 ## Load A from stack pointer with constant offset.
 ## B is destroyed
-#49 mov_a_sp+byte: MEMwrite Bread PCincr
-#	  Zero Oread 			# Clear the carry
-#	  SPwrite ADlowrite A+B Oread 	# SPlo+B => Oreg
-#	  Olowrite ARloread 			# and stored into ARlo
-#	  SPwrite ADhiwrite A+0 Oread 	# SPhi+carry => Oreg
-#	  Olowrite ARhiread 			# and stored into ARhi
-#	  ARwrite MEMwrite Aread 		# A = $ADDR,B
-#          uSreset 
+#49 mov_a_sp+byte:
+#	MEMwrite Bread PCincr
+#	  CLC()					# Clear the carry
+#	  SPwrite ADlowrite A+B Oread		# SPlo+B => Oreg
+#	  Olowrite ARloread			# and stored into ARlo
+#	  SPwrite ADhiwrite A+0 Oread		# SPhi+carry => Oreg
+#	  Olowrite ARhiread			# and stored into ARhi
+#	  ARwrite MEMwrite Aread		# A = $ADDR,B
+#	   uSreset 
 #
 #
 #

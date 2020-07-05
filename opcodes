@@ -51,6 +51,7 @@
 3b 3 pushw_w
 3c 3 pusha_w
 3d 3 popb_w
+3e 3 pushw_a
 40 3 jeq_w
 41 3 jlt_w
 42 3 jne_w
@@ -59,8 +60,8 @@
 45 3 jgt_w
 48 3 jmp_w
 50 1 rts
-51 5 movb_ws
-52 5 movw_ws
+51 5 movb_wS
+52 5 movw_wS
 58 5 movb_wp
 59 5 movb_pw
 5a 5 movw_wp
@@ -99,6 +100,7 @@
 a0 1 neg_x
 a1 1 cmp_xy
 a2 1 mov_xy
+a3 3 mov_xP
 b0 3 jeq_xyw
 b1 3 jlt_xyw
 b2 3 jne_xyw

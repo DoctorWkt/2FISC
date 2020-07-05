@@ -131,6 +131,8 @@ sub tokenise_line {
 # 	'y': Y register
 # 	's': Stack pointer
 # 	'S': Stack pointer plus offset
+# 	'P': Pointer on the stack
+#	'a': 2 byte address
 # 
 sub parse_operand {
     my $operand = shift;
@@ -186,10 +188,22 @@ sub parse_complicated_operand {
     my $operand = shift;
     my ($val, $size);
 
+    if ( $operand =~ m{^\*sp\+(\d+)}i ) {	# Pointer on the stack
+	my $offset= $1;
+	($val, $size)= parse_operand($offset);  # Mainly for error checking
+	return($val, 'P');
+    }
+
     if ( $operand =~ m{^\*(\S*)} ) {		# Pointer to value
         my $simple = $1;
 	($val, $size)= parse_operand($simple);
 	return($val, 'p');
+    }
+
+    if ( $operand =~ m{^\&(\S*)} ) {		# Location address
+        my $simple = $1;
+	($val, $size)= parse_operand($simple);
+	return($val, 'a');
     }
 
     if ( $operand =~ m{^sp\+(\d+)}i ) {		# sp + decimal offset
@@ -380,7 +394,9 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
                 $instsize += 1;
             }
             if ( ($op->[1] eq 'w') || ($op->[1] eq 'S')
-				   || ($op->[1] eq 'p')) {
+				   || ($op->[1] eq 'p') 
+				   || ($op->[1] eq 'P')
+				   || ($op->[1] eq 'a')) {
                 $MEM[ $posn++ ] = $op->[0] & 0xff;
                 $MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;
                 $instsize += 2;
