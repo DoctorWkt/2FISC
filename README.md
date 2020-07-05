@@ -37,8 +37,7 @@ the final version. I still have to do a lot of checking on the design.
 
 ## Status of the CPU
 
-**end-June, 2020**: Both the Perl simulator and the Verilog model work
-well. I need to breadboard the control logic to ensure that I've got
-the timing right.
+**early-July, 2020**: Both the Perl simulator and the Verilog model work
+well. I am happy with the design and I've ordered the PCBs and components.
 
 For more detail on progress, you can read my [journal](Docs/journal.md).
