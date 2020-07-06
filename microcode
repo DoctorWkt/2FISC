@@ -925,7 +925,7 @@ A4 mov_yS:
 
 # Copy a byte from a SP+offset into the X register
 A5 mov_xS:
-	Zero Oread				# Add SP+offset into DR
+	CLC()					# Add SP+offset into DR
 	MEMwrite Bread PCincr
 	SPwrite ADlowrite A+B Oread
 	Olowrite DRloread
@@ -935,6 +935,22 @@ A5 mov_xS:
 	DRwrite MEMwrite Aread
 	uSreset
 
+
+# Increment the word at SP+offset
+A6 incw_S:
+	CLC()					# Add SP+offset into DR
+	MEMwrite Bread PCincr
+	SPwrite ADlowrite A+B Oread
+	Olowrite DRloread
+	MEMwrite Bread PCincr
+	SPwrite ADhiwrite A+B Oread
+	Olowrite DRhiread
+	DRwrite MEMwrite A+1 Oread
+	DRwrite Olowrite MEMread
+	ARincr DRincr
+	DRwrite MEMwrite A+0 Oread
+	DRwrite Olowrite MEMread
+	uSreset
 
 # B0-1B: X/Y Jump instructions
 
