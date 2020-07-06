@@ -1,4 +1,5 @@
 # Conditional jump tests after comparison
+	.rom
 
 	ldb r0, 3;  ldb r1, 3
 	cmpb r0,r1; jeq L1

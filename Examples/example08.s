@@ -1,4 +1,5 @@
 # Test assembler pseudo operations
+	.rom
 
 fred:	.equ $8000
 bang:	.equ '!'

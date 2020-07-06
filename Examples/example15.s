@@ -1,6 +1,7 @@
 # 16-bit addition on two words that are local values on the stack.
 # We don't have enough microinstructions per instruction, so we
 # perform two instructions back to back to make it happen.
+	.rom
 
 	ldw sp, $0000			# Initialise the stack pointer
 	pusha $1234			# Push $1234 on the stack

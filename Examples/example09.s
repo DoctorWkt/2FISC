@@ -1,4 +1,5 @@
 # Test of jsr and rts
+	.rom
 
 	out 'A'; out 'B'
 	jsr printmore

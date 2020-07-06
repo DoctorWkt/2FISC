@@ -1,6 +1,7 @@
 # Tests on the ALU byte operations between two local variables.
 # There isn't enough microinstructions to work on two SP+offset
 # values at one time, so we load one into the Y register first.
+	.rom
 
 	ldw sp, $0000			# Initialise the stack pointer
 	push $20			# Push $20 on the stack

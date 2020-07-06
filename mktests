@@ -25,3 +25,25 @@ do
    fi
    rm -f instr.rom
 done
+
+for i in Examples/ramexample*s
+do
+   # Work out the output and error file names
+   out=`echo $i | sed 's/example/out.example/'`
+   err=`echo $i | sed 's/example/err.example/'`
+
+   if [ ! -f "$out" -a ! -f "$err" ]
+   then
+     ./cas $i 2> "$err"
+     # If the err file is empty
+     if [ ! -s "$err" ]
+     then
+        rm -f "$err"
+        ./cas $i
+	./csim -l > "$out"
+      fi
+   fi
+   rm -f instr.rom
+done
+
+exit 0

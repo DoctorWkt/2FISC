@@ -1,4 +1,5 @@
 # Tests on the ALU byte operations between a local variable and Y register
+	.rom
 
 	ldw sp, $0000			# Initialise the stack pointer
 	push $22			# Push $22 on the stack

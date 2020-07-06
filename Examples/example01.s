@@ -1,3 +1,4 @@
+	.rom
 # Clear operations
 	clrb r0
 	clrw r1

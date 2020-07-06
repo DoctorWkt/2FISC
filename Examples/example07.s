@@ -1,4 +1,5 @@
 # Operations on the X/Y registers.
+	.rom
 
 # Output to the UART, do a
 # simple addition and a jump

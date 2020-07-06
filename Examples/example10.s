@@ -1,4 +1,5 @@
 # Test some stack operations
+	.rom
 	push 'W'
 	push 'T'
 

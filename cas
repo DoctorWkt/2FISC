@@ -13,9 +13,11 @@ my @Linenum;
 my $linenum;
 my $debug     = 0;
 my $firstpass = 1;
-my $textposn  = 0;
-my $dataposn  = 0;
-my $posn      = 0;
+my $isinrom   = 0;           # True if we are targetting ROM
+my $textposn  = 0x4000;      # Next available position in .text section
+my $dataposn  = 0;           # Next available position in .data section
+my $isindata  = 0;           # If true, in the .data section
+my $posn      = $textposn;
 my %Inst;
 
 # Load the opcodes file to populate the %Inst hash
@@ -24,17 +26,19 @@ sub load_opcodes {
     my %Opcode;
 
     # Add the pseudo operations to start with
-    $Inst{".byte_b"} = [ -1, 1]; $Opcode{".byte_b"} = 1;
-    $Inst{".word_w"} = [ -1, 2]; $Opcode{".word_w"} = 1;
+    $Inst{".byte_b"}   = [ -1, 1 ];
+    $Opcode{".byte_b"} = 1;
+    $Inst{".word_w"}   = [ -1, 2 ];
+    $Opcode{".word_w"} = 1;
 
     open( my $IN, "<", "opcodes" ) || die("Cannot read opcodes: $!\n");
     while (<$IN>) {
         chomp;
         $lnum++;
-        s{#.*}{};     		# Lose comments
-        s{^\s+}{};    		# Lose leading whitespace
-        s{\s+$}{};    		# Lose trailing whitespace
-        next if (m{^$});    	# Ignore empty lines
+        s{#.*}{};     	    # Lose comments
+        s{^\s+}{};    	    # Lose leading whitespace
+        s{\s+$}{};    	    # Lose trailing whitespace
+        next if (m{^$});    # Ignore empty lines
 
         my ( $opcode, $oplen, $name ) = split( m{\s+}, $_ );
         die("Missing opcode on line $lnum\n") if ( !defined($opcode) );
@@ -52,9 +56,10 @@ sub load_opcodes {
 }
 
 # Symbol table management. Each symbol is stored as a
-# 2-tuple: [ value, size ]. Size is one of 'b', 'w'
+# 3-tuple: [ value, size, isindata ]. Size is one of 'b', 'w'
 # or 'l' to represent 8-bit btyes, 16-bit words or
-# 32-bit longs.
+# 32-bit longs. If isindata is true, this symbol belongs
+# in the data section.
 my %Sym;
 
 # Get the value and size of a symbol from the table.
@@ -70,55 +75,63 @@ sub get_symbol {
 
 # Add a new symbol value and size to the symbol table
 sub add_symbol {
-    my ( $name, $val, $size ) = @_;
+    my ( $name, $val, $size, $indata ) = @_;
 
     die("Symbol $name on line $linenum already exists, can't redefine it\n")
       if ( defined( $Sym{$name} ) );
-    $Sym{$name} = [ $val, $size ];
+    $Sym{$name} = [ $val, $size, $indata ];
 }
-
 
 # Given a line of text, tokenise it
 # and return the list of tokens
 sub tokenise_line {
-  my @tokenlist;
-  $_= shift(@_);
+    my @tokenlist;
+    $_ = shift(@_);
 
-  # Remove any comments and leading whitespace
-  s{\s*\#.*}{}; s{^\s*}{};
+    # Remove any comments and leading whitespace
+    s{\s*\#.*}{};
+    s{^\s*}{};
 
-  while (length($_) != 0) {
+    while ( length($_) != 0 ) {
 
-    # Skip over leading commas and spaces
-    if (s{^([,\s])\s*}{}) { next; }
+        # Skip over leading commas and spaces
+        if (s{^([,\s])\s*}{}) { next; }
 
-    # Character literal
-    if (s{^('[^']')\s*}{}) {
-      push(@tokenlist,$1); next;
+        # Character literal
+        if (s{^('[^']')\s*}{}) {
+            push( @tokenlist, $1 );
+            next;
+        }
+
+        # Escaped character literal
+        if (s{^('\\[^']')\s*}{}) {
+            push( @tokenlist, $1 );
+            next;
+        }
+
+        # String literal
+        if (s{^("[^"]*")\s*}{}) {
+
+            # Change literal \n \t \r
+            my $str = $1;
+            $str =~ s/\\n/\n/g;
+            $str =~ s/\\t/\t/g;
+            $str =~ s/\\r/\r/g;
+            push( @tokenlist, $str );
+            next;
+        }
+
+        # Stuff that isn't commas or spaces
+        if (s{^([^,\s]+)}{}) {
+            push( @tokenlist, $1 );
+            next;
+        }
+
+        die("Unrecognised token $_\n");
     }
 
-    # Escaped character literal
-    if (s{^('\\[^']')\s*}{}) {
-      push(@tokenlist,$1); next;
-    }
-
-    # String literal
-    if (s{^("[^"]*")\s*}{}) {
-      # Change literal \n \t \r
-      my $str= $1;
-      $str=~ s/\\n/\n/g; $str=~ s/\\t/\t/g; $str=~ s/\\r/\r/g;
-      push(@tokenlist, $str); next;
-    }
-
-    # Stuff that isn't commas or spaces
-    if (s{^([^,\s]+)}{}) {
-      push(@tokenlist, $1); next;
-    }
-
-    die("Unrecognised token $_\n");
-  }
-  # print Dumper(\@tokenlist);
-  return(@tokenlist);
+    # print Dumper(\@tokenlist);
+    return (@tokenlist);
 }
 
 # Parse an operand from a line and return its value and "type".
@@ -133,23 +146,23 @@ sub tokenise_line {
 # 	'S': Stack pointer plus offset
 # 	'P': Pointer on the stack
 #	'a': 2 byte address
-# 
+#
 sub parse_operand {
     my $operand = shift;
 
-    if ( $operand =~ m{^x$}i ) {	# X register
+    if ( $operand =~ m{^x$}i ) {    # X register
         return ( 0, 'x' );
     }
 
-    if ( $operand =~ m{^y$}i ) {	# Y register
+    if ( $operand =~ m{^y$}i ) {    # Y register
         return ( 0, 'y' );
     }
 
-    if ( $operand =~ m{^sp$}i ) {	# Stack pointer
+    if ( $operand =~ m{^sp$}i ) {    # Stack pointer
         return ( 0, 's' );
     }
 
-    if ( $operand =~ m{^'(.)'$} ) {    	# 1-byte char const
+    if ( $operand =~ m{^'(.)'$} ) {    # 1-byte char const
         my $char = $1;
         return ( ord($char), 'b' );
     }
@@ -186,39 +199,39 @@ sub parse_operand {
 # Parse a more complicated operand from a line and return its value and size
 sub parse_complicated_operand {
     my $operand = shift;
-    my ($val, $size);
+    my ( $val, $size );
 
-    if ( $operand =~ m{^\*sp\+(\d+)}i ) {	# Pointer on the stack
-	my $offset= $1;
-	($val, $size)= parse_operand($offset);  # Mainly for error checking
-	return($val, 'P');
+    if ( $operand =~ m{^\*sp\+(\d+)}i ) {    # Pointer on the stack
+        my $offset = $1;
+        ( $val, $size ) = parse_operand($offset);    # Mainly for error checking
+        return ( $val, 'P' );
     }
 
-    if ( $operand =~ m{^\*(\S*)} ) {		# Pointer to value
+    if ( $operand =~ m{^\*(\S*)} ) {                 # Pointer to value
         my $simple = $1;
-	($val, $size)= parse_operand($simple);
-	return($val, 'p');
+        ( $val, $size ) = parse_operand($simple);
+        return ( $val, 'p' );
     }
 
-    if ( $operand =~ m{^\&(\S*)} ) {		# Location address
+    if ( $operand =~ m{^\&(\S*)} ) {                 # Location address
         my $simple = $1;
-	($val, $size)= parse_operand($simple);
-	return($val, 'a');
+        ( $val, $size ) = parse_operand($simple);
+        return ( $val, 'a' );
     }
 
-    if ( $operand =~ m{^sp\+(\d+)}i ) {		# sp + decimal offset
-	my $offset= $1;
-	($val, $size)= parse_operand($offset);  # Mainly for error checking
-	return($val, 'S');
+    if ( $operand =~ m{^sp\+(\d+)}i ) {              # sp + decimal offset
+        my $offset = $1;
+        ( $val, $size ) = parse_operand($offset);    # Mainly for error checking
+        return ( $val, 'S' );
     }
 
-    if ( $operand =~ m{^(.*)\+(\d+)} ) {	# something + decimal offset
-	my ($simple, $offset)= ($1, $2);
-	($val, $size)= parse_operand($simple);
-	return($val+$offset, $size);
+    if ( $operand =~ m{^(.*)\+(\d+)} ) {    # something + decimal offset
+        my ( $simple, $offset ) = ( $1, $2 );
+        ( $val, $size ) = parse_operand($simple);
+        return ( $val + $offset, $size );
     }
 
-    return ( parse_operand($operand) );    	# else a simple operand
+    return ( parse_operand($operand) );     # else a simple operand
 }
 
 # Given a string that represent an instruction line, return:
@@ -226,14 +239,14 @@ sub parse_complicated_operand {
 # - the encoded version of the instruction, e.g. movb_wb, or undef
 # - a (possibly empty) list of operand values
 sub parse_instruction {
-    my $line = shift;
+    my $line  = shift;
     my $label = undef;
     my $inst;
     my @oplist;
     my $opsize = "_";
 
     # Tokenise the line into words
-    my @word = tokenise_line( $line );
+    my @word = tokenise_line($line);
 
     # Get any label
     if ( $word[0] =~ m{(.*):} ) {
@@ -250,35 +263,70 @@ sub parse_instruction {
 
     # Deal with pseudo-operations
 
+    # .data: Switch to data section
+    if ( $inst eq ".data" ) {
+        return ( undef, undef ) if ($isindata);
+        die("No .data section in ROM\n") if ($isinrom);
+
+        # Save the current text position and load the data position
+        $textposn = $posn;
+        $posn     = $dataposn;
+        $isindata = 1;
+        return ( undef, undef );
+    }
+
+    # .text: Switch to text section
+    if ( $inst eq ".text" ) {
+        return ( undef, undef ) if ( !$isindata );
+
+        # Save the current data position and load the text position
+        $dataposn = $posn;
+        $posn     = $textposn;
+        $isindata = 0;
+        return ( undef, undef );
+    }
+
+    # .rom: Target the 8K ROM
+    if ( $inst eq ".rom" ) {
+        die("Must set .rom at the start! $textposn\n") if ( $isinrom == 1 );
+
+        # Go back to position $0000
+        $posn = $textposn = 0;
+        $isinrom = 1;
+        return ( undef, undef );
+    }
+
     # .equ: give a label a fixed address
-    if ($inst eq ".equ") {
-      die(".equ with no label on line $linenum\n") if (!defined($label));
-      # Get the value and define the symbol
-      my ( $value, $size ) = parse_complicated_operand( shift(@word) );
-      die(".equ with no value on $linenum\n") if (!defined($value));
-      add_symbol( $label, $value, $size ) if ($firstpass);
-      return( undef, undef );
+    if ( $inst eq ".equ" ) {
+        die(".equ with no label on line $linenum\n") if ( !defined($label) );
+
+        # Get the value and define the symbol
+        my ( $value, $size ) = parse_complicated_operand( shift(@word) );
+        die(".equ with no value on $linenum\n") if ( !defined($value) );
+        add_symbol( $label, $value, $size, 0 ) if ($firstpass);
+        return ( undef, undef );
     }
 
     # .str: Place a string in memory terminated with a NUL. Define
     # any label associated with the string.
-    if ($inst eq ".str") {
-      my $oldposn= $posn;
-      add_symbol( $label, $posn, 'w' ) if ($firstpass && defined($label));
+    if ( $inst eq ".str" ) {
+        my $oldposn = $posn;
+        add_symbol( $label, $posn, 'w', $isindata )
+          if ( $firstpass && defined($label) );
 
-      my $str = shift(@word);
-      foreach my $char (split("", substr($str, 1, -1))) {
-        $MEM[ $posn++ ] = ord($char);
-      }
-      $MEM[ $posn++ ] = 0;
-      if ($debug && !$firstpass) {
-	  printf("%04x: ", $oldposn);
-	  while ($oldposn < $posn) {
-	    printf("%02x ",  $MEM[ $oldposn++ ]);
-	  }
-	  print("\n");
-      }
-      return( undef, undef );
+        my $str = shift(@word);
+        foreach my $char ( split( "", substr( $str, 1, -1 ) ) ) {
+            $MEM[ $posn++ ] = ord($char);
+        }
+        $MEM[ $posn++ ] = 0;
+        if ( $debug && !$firstpass ) {
+            printf( "%04x: ", $oldposn );
+            while ( $oldposn < $posn ) {
+                printf( "%02x ", $MEM[ $oldposn++ ] );
+            }
+            print("\n");
+        }
+        return ( undef, undef );
     }
 
     # Now process the remaining operands
@@ -317,7 +365,7 @@ load_opcodes();
 
 # Set up the register locations
 foreach my $i ( 0 .. 7 ) {
-    add_symbol( "r$i", 0xFFD0 + $i*4, 'w' );
+    add_symbol( "r$i", 0xFFD0 + $i * 4, 'w', 0 );
 }
 
 # Read in the instructions and store in the @Line array. Use the
@@ -352,13 +400,13 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
             }
             print("\t$inst ") if ( defined($inst) );
             foreach my $op (@oplist) {
-	      printf(" \$%x(%s)", $op->[0], $op->[1]);
-	    }
+                printf( " \$%x(%s)", $op->[0], $op->[1] );
+            }
             print("\n");
         }
 
         # Set the label's location
-        add_symbol( $label, $posn, 'w' ) if ( defined($label) );
+        add_symbol( $label, $posn, 'w', $isindata ) if ( defined($label) );
 
         # Move the position up
         next if ( !defined($inst) );
@@ -368,9 +416,23 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
     }
 }
 
+# Before the second pass: start the data section immediately after
+# the text section. Also work out where the whole thing ends.
+my $endposn = $dataposn + $posn;
+$dataposn = $posn;
+
+# Go through the symbol table and add on the data position start
+# to all symbols that should be in the data section.
+foreach my $name ( keys(%Sym) ) {
+    $Sym{$name}[0] += $dataposn if ( $Sym{$name}[2] );
+    # printf( "%04x %s %d: %s \n",
+    #    $Sym{$name}[0], $Sym{$name}[1], $Sym{$name}[2], $name );
+}
+
 # Second pass: generate the machine code
+$isinrom   = 0;           # Don't worry, it will get set again if needed
 $firstpass = 0;
-$posn      = 0;
+$posn      = $textposn;
 print("\nPass Two\n") if ($debug);
 foreach my $i ( 0 .. ( @Line - 1 ) ) {
     my $line = $Line[$i];
@@ -381,11 +443,12 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
         my $instsize = 0;
 
         # Put the instruction in memory, unless the instruction
-	# is a pseudo-op (with opcode -1).
-        my $oldposn= $posn;
-        if ($Inst{$inst}[0] != -1) {
-          $MEM[ $posn++ ] = $Inst{$inst}[0]; $instsize++;
-	}
+        # is a pseudo-op (with opcode -1).
+        my $oldposn = $posn;
+        if ( $Inst{$inst}[0] != -1 ) {
+            $MEM[ $posn++ ] = $Inst{$inst}[0];
+            $instsize++;
+        }
 
         # Put the operands in memory
         foreach my $op (@oplist) {
@@ -393,10 +456,12 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
                 $MEM[ $posn++ ] = $op->[0] & 0xff;
                 $instsize += 1;
             }
-            if ( ($op->[1] eq 'w') || ($op->[1] eq 'S')
-				   || ($op->[1] eq 'p') 
-				   || ($op->[1] eq 'P')
-				   || ($op->[1] eq 'a')) {
+            if (   ( $op->[1] eq 'w' )
+                || ( $op->[1] eq 'S' )
+                || ( $op->[1] eq 'p' )
+                || ( $op->[1] eq 'P' )
+                || ( $op->[1] eq 'a' ) )
+            {
                 $MEM[ $posn++ ] = $op->[0] & 0xff;
                 $MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;
                 $instsize += 2;
@@ -411,24 +476,34 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
         }
 
         # Check that the calculated instruction size tallies with the
-	# actual instruction size
+        # actual instruction size
         die( "Incorrect size of operands on line $linenum: $inst, ",
-            $Inst{$inst}[1], ", ", ( $instsize ), "\n" )
-          if ( $Inst{$inst}[1] != ( $instsize ) );
+            $Inst{$inst}[1], ", ", ($instsize), "\n" )
+          if ( $Inst{$inst}[1] != ($instsize) );
 
-	if ($debug) {
-	  printf("%04x: ", $oldposn);
-	  while ($oldposn < $posn) {
-	    printf("%02x ",  $MEM[ $oldposn++ ]);
-	  }
-	  print("\n");
+        if ($debug) {
+            printf( "%04x: ", $oldposn );
+            while ( $oldposn < $posn ) {
+                printf( "%02x ", $MEM[ $oldposn++ ] );
+            }
+            print("\n");
         }
     }
 }
 
-# Write out the 8K instruction ROM in hex
+# Work out the start and end positions
+my ( $start, $end );
+if ($isinrom) {
+
+    # 8K of instruction ROM
+    ( $start, $end ) = ( 0, 0x1fff );
+} else {
+    ( $start, $end ) = ( 0x4000, $endposn - 1 );
+}
+
+# Write out the memory contents
 open( my $OUT, ">", "instr.rom" ) || die("Can't write to instr.rom: $!\n");
-for my $i ( 0 .. ( 2**13 - 1 ) ) {
+for my $i ( $start .. $end ) {
     printf( $OUT "%02x ", $MEM[$i] ? $MEM[$i] : 0 );
     print( $OUT "\n" ) if ( ( $i % 16 ) == 15 );
 }

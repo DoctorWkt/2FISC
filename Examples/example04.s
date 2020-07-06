@@ -1,4 +1,5 @@
 # Test the memory bank operations
+	.rom
 	bank 0; ldb $8000, 'A'
 	bank 1; ldb $8000, 'B'
 	bank 2; ldb $8000, 'C'

@@ -1,4 +1,5 @@
 # Test of the 16-bit pointer instructions
+	.rom
 
 	ldw $8010, $5754		# "WT" at $8010
 	ldw $8000, $8010		# $8000 points at $8010

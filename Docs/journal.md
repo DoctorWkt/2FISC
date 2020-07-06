@@ -1623,3 +1623,30 @@ Now I'm wondering if I should modify `gen_ucode` to use the C pre-processor
 (or add in my own pre-processor) because of the large amounts of duplicate
 microcode. OK, I've just done this. I've added a couple of macros, but I
 haven't done the whole of the `microcode` file yet.
+
+Later, yes I've added a lot of macros to the `microcode` file.
+
+## Mon  6 Jul 13:28:53 AEST 2020
+
+I started on porting the "acwj" compiler to FISC2 last night. Only a
+very small start, and I'll keep a separate journal.
+
+In hindsight, yes I should have made the uSeq counter bigger than
+4 bits so I could have *huge* instructions!
+
+I was also wondering if I could clock the CPU at a higher speed
+but for the slow components latch their control inputs for two
+clock cycles, e.g. the ALU. It would be interesting to get up to 8MHz
+or 10MHz :-) I could lose the 8K Instruction EEPROM and replace it
+with a 4K EPROM. I could use a 4:16 demux for the memory regions
+and have only a 4K shared region. This would give me eight 56K
+memory banks. That's 448K of RAM! And if I could interface an SD
+card, that would be excellent. Perhaps this could be FISC3.
+
+## Mon  6 Jul 20:23:04 AEST 2020
+
+I've added more pseudo-ops to the assembler: `.rom`, `.text` and `.data`.
+I think they work but I'll have to keep an eye on them. I now need to
+modify the simulator to load the `cas` output into RAM. OK, that's done
+too, and I've altered the code that builds and runs the examples to
+know about the new `-l` flag to `csim`.

@@ -1,4 +1,5 @@
 # 16-bit conditional jump tests after comparison
+	.rom
 
 	ldw r0, $1234;  ldw r1, $1234
 	cmpw r0, r1; jeq L1

@@ -1,4 +1,5 @@
 # 16-bit addition
+	.rom
 	ldw r0, $4520
 	ldw r1, $1234
 	addw r0, r1
