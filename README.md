@@ -30,10 +30,7 @@ At present, I have:
  + a simple compiler, [clc](clc)
  + example assembly and higher-level programs in [Examples](Examples)
  + a Verilog design in [Verilog](Verilog)
- + an initial schematic in [Kicad/schematic.pdf](Kicad/schematic.pdf)
-
-I have a first draft PCB layout in [Kicad](Kicad) but this won't be
-the final version. I still have to do a lot of checking on the design.
+ + a final schematic in [Kicad/schematic.pdf](Kicad/schematic.pdf)
 
 ## Status of the CPU
 
