@@ -911,8 +911,24 @@ A3 mov_xP:
 	DRwrite MEMwrite Aread			# Get the byte, finally
 	uSreset
 
+# Copy a byte from the X register
+# to a pointer on the stack
+A4 mov_Px:
+	CLC()					# Clear carry
+	SPwrite ADlowrite Bread			# Get SPlo into B
+	MEMwrite A+B Oread			# Add on the offset
+	Olowrite ARloread PCincr		# Save into ARlo
+	SPwrite ADhiwrite Bread			# Get SPhi into B
+	MEMwrite A+B Oread			# Add on the offset
+	Olowrite ARhiread PCincr		# Save into ARhi
+	ARwrite MEMwrite DRloread		# Get pointer low byte
+	ARincr
+	ARwrite MEMwrite DRhiread		# Get pointer high byte
+	DRwrite MEMread Awrite			# Send the byte, finally
+	uSreset
+
 # Copy a byte from a SP+offset into the Y register
-A4 mov_yS:
+A5 mov_yS:
 	Zero Oread				# Add SP+offset into DR
 	MEMwrite Bread PCincr
 	SPwrite ADlowrite A+B Oread
@@ -924,7 +940,7 @@ A4 mov_yS:
 	uSreset
 
 # Copy a byte from a SP+offset into the X register
-A5 mov_xS:
+A6 mov_xS:
 	CLC()					# Add SP+offset into DR
 	MEMwrite Bread PCincr
 	SPwrite ADlowrite A+B Oread
@@ -937,7 +953,7 @@ A5 mov_xS:
 
 
 # Increment the word at SP+offset
-A6 incw_S:
+A7 incw_S:
 	CLC()					# Add SP+offset into DR
 	MEMwrite Bread PCincr
 	SPwrite ADlowrite A+B Oread
@@ -1187,6 +1203,58 @@ F5 orwdrar:
 # XOR
 F6 xorwdrar:
 	ALUW_DRAR(A^B)
+
+# Copy byte from AR to DR
+F7 movbdrar:
+	ARwrite MEMwrite Aread			# A= Mem[ AR ]
+	DRwrite MEMread Awrite			# Mem[ DR ]= A
+	uSreset
+
+# Copy word from AR to DR
+F8 movwdrar:
+	ARwrite MEMwrite Aread			# A= Mem[ AR ]
+	DRwrite MEMread Awrite			# Mem[ DR ]= A
+	ARincr DRincr
+	ARwrite MEMwrite Aread			# A= Mem[ AR ]
+	DRwrite MEMread Awrite			# Mem[ DR ]= A
+	uSreset
+
+# Load DR with address, AR with address from pointer on the stack.
+# This is tricky because we need to do the sp+val and also deref
+# that address. But before that, we have to load the DR so we can't
+# use that as temporary storage.
+FD drar_wP:
+	MEMwrite DRloread PCincr		# Get the destination address
+	MEMwrite DRhiread PCincr
+        CLC()                                   # Clear carry
+        SPwrite ADlowrite Bread                 # Get SPlo into B
+        MEMwrite A+B Oread                      # Add on the offset
+        Olowrite Aread PCincr                	# Save into A
+        SPwrite ADhiwrite Bread                 # Get SPhi into B
+        MEMwrite A+B Oread                      # Add on the offset
+        Olowrite ARhiread PCincr                # Save into ARhi
+	Awrite ARloread				# and get ARlo from A
+        ARwrite MEMwrite Aread                  # Get pointer low byte into A
+        ARincr
+        ARwrite MEMwrite ARhiread               # Get pointer high byte
+	Awrite ARloread				# and get ARlo from A
+	uSreset
+
+# Load AR with address, DR with address from pointer on the stack
+FE drar_Pw:
+        CLC()                                   # Clear carry
+        SPwrite ADlowrite Bread                 # Get SPlo into B
+        MEMwrite A+B Oread                      # Add on the offset
+        Olowrite ARloread PCincr                # Save into ARlo
+        SPwrite ADhiwrite Bread                 # Get SPhi into B
+        MEMwrite A+B Oread                      # Add on the offset
+        Olowrite ARhiread PCincr                # Save into ARhi
+        ARwrite MEMwrite DRloread               # Get pointer low byte
+        ARincr
+        ARwrite MEMwrite DRhiread               # Get pointer high byte
+	MEMwrite ARloread PCincr		# Get the source address
+	MEMwrite ARhiread PCincr
+	uSreset
 
 # Load DR and AR from two SP+offset operands
 FF drar_SS:

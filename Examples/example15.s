@@ -21,6 +21,19 @@
 	jsr prhex			# and print it
 	pop x
 	out '\n'
+
+# Now, simply move a word value between the locals on the stack
+	drar sp+0, sp+2			# Load addresses of the two locals
+	movwdrar			# Move from source to dest
+	mov x, sp+1			# Push high byte on the stack
+	push x
+	jsr prhex			# and print it
+	pop x
+	mov x, sp+0			# Push low byte on the stack
+	push x
+	jsr prhex			# and print it
+	pop x
+	out '\n'
 	jmp $ffff
 
 # prhex function: Print out the byte value which is

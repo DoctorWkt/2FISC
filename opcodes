@@ -101,9 +101,10 @@ a0 1 neg_x
 a1 1 cmp_xy
 a2 1 mov_xy
 a3 3 mov_xP
-a4 3 mov_yS
-a5 3 mov_xS
-a6 3 incw_S
+a4 3 mov_Px
+a5 3 mov_yS
+a6 3 mov_xS
+a7 3 incw_S
 b0 3 jeq_xyw
 b1 3 jlt_xyw
 b2 3 jne_xyw
@@ -148,4 +149,8 @@ f3 1 sbcwdrar
 f4 1 andwdrar
 f5 1 orwdrar
 f6 1 xorwdrar
+f7 1 movbdrar
+f8 1 movwdrar
+fd 5 drar_wP
+fe 5 drar_Pw
 ff 5 drar_SS

@@ -35,9 +35,9 @@ sub load_opcodes {
     while (<$IN>) {
         chomp;
         $lnum++;
-        s{#.*}{};     	    # Lose comments
-        s{^\s+}{};    	    # Lose leading whitespace
-        s{\s+$}{};    	    # Lose trailing whitespace
+        s{#.*}{};     # Lose comments
+        s{^\s+}{};    # Lose leading whitespace
+        s{\s+$}{};    # Lose trailing whitespace
         next if (m{^$});    # Ignore empty lines
 
         my ( $opcode, $oplen, $name ) = split( m{\s+}, $_ );
@@ -263,6 +263,11 @@ sub parse_instruction {
 
     # Deal with pseudo-operations
 
+    # .globl: do nothing for now
+    if ( $inst eq ".globl" ) {
+        return ( undef, undef );
+    }
+
     # .data: Switch to data section
     if ( $inst eq ".data" ) {
         return ( undef, undef ) if ($isindata);
@@ -347,18 +352,23 @@ sub parse_instruction {
 
 ### MAIN PROGRAM
 
-# Enable debugging
+# Check for any options
 while ( @ARGV > 1 ) {
+
+    # Stop when no arguments
+    last if ( !( $ARGV[0] =~ m{^-} ) );
+
+    # Enable debugging
     if ( $ARGV[0] eq "-d" ) {
         $debug++;
         shift(@ARGV);
         next;
     }
-    die("Usage: $0 [-d] infile\n");
+    die("Usage: $0 [-d] infile [infile ...]\n");
 }
 
 # Give usage
-die("Usage: $0 [-d] [-r] infile\n") if ( @ARGV != 1 );
+die("Usage: $0 [-d] infile [infile ...]\n") if ( @ARGV < 1 );
 
 # Load the instruction names, opcodes and lengths
 load_opcodes();
@@ -370,19 +380,21 @@ foreach my $i ( 0 .. 7 ) {
 
 # Read in the instructions and store in the @Line array. Use the
 # C preprocessor as well.
-open( my $IN, "-|", "cpp -nostdinc $ARGV[0]" )
-  || die("Cannot open $ARGV[0]: $!");
-while (<$IN>) {
-    chomp;
-    $linenum++;
-    s{#.*}{};     # Lose comments
-    s{^\s+}{};    # Lose leading whitespace
-    s{\s+$}{};    # Lose trailing whitespace
-    next if (m{^$});    # Ignore empty lines
-    push( @Line,    $_ );         # Save the cleaned-up line and its line number
-    push( @Linenum, $linenum );
+foreach my $file (@ARGV) {
+    open( my $IN, "<", $file ) || die("Cannot open $file: $!");
+    $linenum = 0;
+    while (<$IN>) {
+        chomp;
+        $linenum++;
+        s{#.*}{};     # Lose comments
+        s{^\s+}{};    # Lose leading whitespace
+        s{\s+$}{};    # Lose trailing whitespace
+        next if (m{^$});    # Ignore empty lines
+        push( @Line, $_ );  # Save the cleaned-up line and its line number
+        push( @Linenum, "$file:$linenum" );
+    }
+    close($IN);
 }
-close($IN);
 
 # First pass: find the labels
 foreach my $i ( 0 .. ( @Line - 1 ) ) {
@@ -392,15 +404,17 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
         my ( $label, $inst, @oplist ) = parse_instruction($inst);
 
         if ($debug) {
-            printf( "%d (%04x) ", $linenum, $posn );
+            printf( "%s (%04x) ", $linenum, $posn );
             if ( defined($label) ) {
                 print("$label:");
             } else {
                 print("\t");
             }
-            print("\t$inst ") if ( defined($inst) );
-            foreach my $op (@oplist) {
+            if ( defined($inst) ) {
+              print("\t$inst ");
+              foreach my $op (@oplist) {
                 printf( " \$%x(%s)", $op->[0], $op->[1] );
+  	      }
             }
             print("\n");
         }
@@ -425,6 +439,7 @@ $dataposn = $posn;
 # to all symbols that should be in the data section.
 foreach my $name ( keys(%Sym) ) {
     $Sym{$name}[0] += $dataposn if ( $Sym{$name}[2] );
+
     # printf( "%04x %s %d: %s \n",
     #    $Sym{$name}[0], $Sym{$name}[1], $Sym{$name}[2], $name );
 }

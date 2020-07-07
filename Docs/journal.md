@@ -1650,3 +1650,29 @@ I think they work but I'll have to keep an eye on them. I now need to
 modify the simulator to load the `cas` output into RAM. OK, that's done
 too, and I've altered the code that builds and runs the examples to
 know about the new `-l` flag to `csim`.
+
+## Tue  7 Jul 11:07:47 AEST 2020
+
+I've added more instructions this morning. These deal with pointers
+on the stack. Again, I've have to break instructions into two instructions.
+Oh well. I just squeezed into the 16 microinstruction limit. I also realised
+that I can leave out the `uSreset` when I need exactly 16 microinstructions!
+That gives me one extra microinstruction if I need it.
+
+The PCB should be arriving early next week, but I also start teaching
+again next week. I've just written a list of what to solder in which
+order. The big killer with this design is you need to do all the decode
+logic pretty much in one hit!
+
+Next up: get `cas` to input multiple files. That will be fun. I'll
+have to pass one on all files, then pass two on them all again.
+No, it was easy as we pre-load all the input files into an array.
+I got rid of the `cpp` usage for now because it throws off the
+line numbers.
+
+## Tue  7 Jul 16:10:09 AEST 2020
+
+I think I haven't got `.data` working properly in the assembler yet, so
+that's something I will have to look at. I went crazy and sketched out
+the beginning of a design with a 16-bit data bus, several 16-bit registers
+and two ALU ROMs so that it is 16 bits wide.
