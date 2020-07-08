@@ -1676,3 +1676,39 @@ I think I haven't got `.data` working properly in the assembler yet, so
 that's something I will have to look at. I went crazy and sketched out
 the beginning of a design with a 16-bit data bus, several 16-bit registers
 and two ALU ROMs so that it is 16 bits wide.
+
+## Tue  7 Jul 16:58:09 AEST 2020
+
+Yay, I think I've fixed the `.data` problem. I can now do this:
+
+```
+$ cat input001.c
+void prwhexn(int val);
+
+int xx;
+
+void main()
+{ xx= 12 * 3; prwhexn(xx);
+  xx= 18 - 2 * 4; prwhexn(xx);
+  xx= 1 + 2 + 9 - 5/2 + 3*5; prwhexn(xx);
+}
+
+$ ./cwj -S input001.c
+$ ./cas crt0.s prwhexn.s input001.s
+$ ./csim -l
+0024
+000A
+0019
+```
+
+So that's the first C program compiled, assembled and simulated with
+no hand editing. I can't (yet) test it in the Verilog version as it
+expects the Instruction ROM to have the code in it.
+
+One thing I will have to think of is how to name the registers so that
+they don't conflict with the C symbols: `r0` ... `r7`, `x` and `y`. That's
+why I had to use `int xx;` above. For now, I've renamed `x` and `y` to
+`rX` and `rY`.
+
+I've made a start on tansliterating the CSCvon8 monitor, but I think
+I need to write some instructions so I can do `address+rY` indexing.

@@ -7,12 +7,12 @@
 	pusha from			# Push their addresses on the stack
 	pusha to
 
-	mov x, *sp+2			# Get the 'A' through the pointer
-	out x				# Print it
-	mov *sp+0, x			# Copy it into "to"
+	mov rX, *sp+2			# Get the 'A' through the pointer
+	out rX				# Print it
+	mov *sp+0, rX			# Copy it into "to"
 
-	mov x, to			# Get "to"'s value
-	out x				# Print it
+	mov rX, to			# Get "to"'s value
+	out rX				# Print it
  	out '\n'
 
 	jmp $ffff

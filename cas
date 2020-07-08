@@ -14,11 +14,14 @@ my $linenum;
 my $debug     = 0;
 my $firstpass = 1;
 my $isinrom   = 0;           # True if we are targetting ROM
-my $textposn  = 0x4000;      # Next available position in .text section
+my $inittextposn = 0x4000;   # Start at 0x4000 unless in ROM
+my $textposn;      	     # Next available position in .text section
 my $dataposn  = 0;           # Next available position in .data section
 my $isindata  = 0;           # If true, in the .data section
-my $posn      = $textposn;
+my $posn      = $inittextposn;
 my %Inst;
+my @Numlabel;			# Sparse 2D array of numeric labels
+                        	# and at what location they were defined.
 
 # Load the opcodes file to populate the %Inst hash
 sub load_opcodes {
@@ -55,6 +58,39 @@ sub load_opcodes {
     close($IN);
 }
 
+# Given a numeric label value and either 'b' or 'f', return the value of
+# the matching numeric label, or die if none is found
+sub get_numeric_label_value {
+    my ( $n, $direction ) = @_;
+
+    # Get the reference to the array of addresses for the given label
+    my $lref = $Numlabel[$n];
+    die("Numeric label $n never used, cannot be referenced on line $linenum\n")
+      if ( !defined($lref) );
+
+    # Walk the list getting the next value. Keep the previous value.
+    my $bval = undef;
+    foreach my $fval ( @{$lref} ) {
+
+	# We found a label ahead of the current position
+	if ($fval > $posn) {
+	  # Return it if we want a forward label
+          return ($fval, 'w') if ($direction eq "f");
+	  # Stop looking when we want a backward label
+	  last;
+	}
+
+        # We're still behind the current position, so record the last one
+        $bval = $fval;
+    }
+
+    # Return the last back value if the direction is backward
+    return ($bval, 'w') if ( ( $direction eq "b" ) && defined($bval) );
+
+    # We didn't find a reference for the direction
+    die("No value for $n$direction on line $linenum\n");
+}
+
 # Symbol table management. Each symbol is stored as a
 # 3-tuple: [ value, size, isindata ]. Size is one of 'b', 'w'
 # or 'l' to represent 8-bit btyes, 16-bit words or
@@ -68,6 +104,12 @@ sub get_symbol {
 
     # Assume a word on the first pass
     return ( 0, 'w' ) if ( $firstpass && !defined( $Sym{$name} ) );
+
+    # If it's a reference to a numeric label, use another function
+    if ( $name =~ m{^(\d+)([bf])$} ) {
+        return ( get_numeric_label_value( $1, $2 ) );
+    }
+
     die("Symbol $name on line $linenum is undefined\n")
       if ( !defined( $Sym{$name} ) );
     return ( $Sym{$name}->[0], $Sym{$name}->[1] );
@@ -76,6 +118,13 @@ sub get_symbol {
 # Add a new symbol value and size to the symbol table
 sub add_symbol {
     my ( $name, $val, $size, $indata ) = @_;
+
+    # If it's a numeric label, store it in the @Numlabel array
+    # tagged with the current position
+    if ($name=~ m{^\d+$}) {
+      push( @{ $Numlabel[$name] }, $posn );
+      return;
+    }
 
     die("Symbol $name on line $linenum already exists, can't redefine it\n")
       if ( defined( $Sym{$name} ) );
@@ -146,19 +195,24 @@ sub tokenise_line {
 # 	'S': Stack pointer plus offset
 # 	'P': Pointer on the stack
 #	'a': 2 byte address
+#	'i': 2 byte address + rY offset
 #
 sub parse_operand {
     my $operand = shift;
 
-    if ( $operand =~ m{^x$}i ) {    # X register
+    if ( $operand eq '.' ) {		# Current position
+        return ( $posn, 'w' );
+    }
+
+    if ( $operand eq "rX" ) {    	# X register
         return ( 0, 'x' );
     }
 
-    if ( $operand =~ m{^y$}i ) {    # Y register
+    if ( $operand eq "rY" ) {    	# Y register
         return ( 0, 'y' );
     }
 
-    if ( $operand =~ m{^sp$}i ) {    # Stack pointer
+    if ( $operand eq "sp" ) {    	# Stack pointer
         return ( 0, 's' );
     }
 
@@ -193,7 +247,6 @@ sub parse_operand {
       if ( $operand =~ m{^([\.\w]+)$} );
 
     die("Unrecognised operand on line $linenum: $operand\n");
-
 }
 
 # Parse a more complicated operand from a line and return its value and size
@@ -201,7 +254,7 @@ sub parse_complicated_operand {
     my $operand = shift;
     my ( $val, $size );
 
-    if ( $operand =~ m{^\*sp\+(\d+)}i ) {    # Pointer on the stack
+    if ( $operand =~ m{^\*sp\+(\d+)} ) {    # Pointer on the stack
         my $offset = $1;
         ( $val, $size ) = parse_operand($offset);    # Mainly for error checking
         return ( $val, 'P' );
@@ -219,10 +272,16 @@ sub parse_complicated_operand {
         return ( $val, 'a' );
     }
 
-    if ( $operand =~ m{^sp\+(\d+)}i ) {              # sp + decimal offset
+    if ( $operand =~ m{^sp\+(\d+)} ) {              # sp + decimal offset
         my $offset = $1;
         ( $val, $size ) = parse_operand($offset);    # Mainly for error checking
         return ( $val, 'S' );
+    }
+
+    if ( $operand =~ m{^(.*)\+rY$} ) {               # address + rY offset
+        my $base = $1;
+        ( $val, $size ) = parse_operand($base);      # Mainly for error checking
+        return ( $val, 'i' );
     }
 
     if ( $operand =~ m{^(.*)\+(\d+)} ) {    # something + decimal offset
@@ -296,6 +355,7 @@ sub parse_instruction {
         die("Must set .rom at the start! $textposn\n") if ( $isinrom == 1 );
 
         # Go back to position $0000
+	$inittextposn= 0;
         $posn = $textposn = 0;
         $isinrom = 1;
         return ( undef, undef );
@@ -447,7 +507,7 @@ foreach my $name ( keys(%Sym) ) {
 # Second pass: generate the machine code
 $isinrom   = 0;           # Don't worry, it will get set again if needed
 $firstpass = 0;
-$posn      = $textposn;
+$posn      = $inittextposn;
 print("\nPass Two\n") if ($debug);
 foreach my $i ( 0 .. ( @Line - 1 ) ) {
     my $line = $Line[$i];
@@ -475,6 +535,7 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
                 || ( $op->[1] eq 'S' )
                 || ( $op->[1] eq 'p' )
                 || ( $op->[1] eq 'P' )
+                || ( $op->[1] eq 'i' )
                 || ( $op->[1] eq 'a' ) )
             {
                 $MEM[ $posn++ ] = $op->[0] & 0xff;
@@ -509,12 +570,12 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
 # Work out the start and end positions
 my ( $start, $end );
 if ($isinrom) {
-
     # 8K of instruction ROM
     ( $start, $end ) = ( 0, 0x1fff );
 } else {
     ( $start, $end ) = ( 0x4000, $endposn - 1 );
 }
+printf("start 0x%x end 0x%x\n", $start, $end) if ($debug);
 
 # Write out the memory contents
 open( my $OUT, ">", "instr.rom" ) || die("Can't write to instr.rom: $!\n");

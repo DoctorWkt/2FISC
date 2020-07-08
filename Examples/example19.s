@@ -14,10 +14,10 @@
 	drar *sp+0, r0			# Set up DR and AR
 	movwdrar			# Copy "AB" from r0 thru tolo ptr
 
-	mov x, tolo			# Get "to"'s value
-	out x				# Print it
-	mov x, tohi
-	out x
+	mov rX, tolo			# Get "to"'s value
+	out rX				# Print it
+	mov rX, tohi
+	out rX
  	out '\n'
 
 	jmp $ffff

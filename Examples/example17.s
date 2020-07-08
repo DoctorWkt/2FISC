@@ -7,10 +7,10 @@
 	jmp $ffff
 
 # Print the string pointer argument out
-puts:	mov x, *sp+2			# Get a char from the string
-	ldb y, 0
-	jeq x, y, endputs		# If char is 0, exit
-	out x
+puts:	mov rX, *sp+2			# Get a char from the string
+	ldb rY, 0
+	jeq rX, rY, endputs		# If char is 0, exit
+	out rX
 	incw sp+2
 	jmp puts
 endputs:

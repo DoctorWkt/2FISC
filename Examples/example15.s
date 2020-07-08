@@ -12,27 +12,27 @@
 	addwdrar			# Add them together
 					# We should have $68AC in sp+0
 					# So let's print both bytes
-	mov x, sp+1			# Push high byte on the stack
-	push x
+	mov rX, sp+1			# Push high byte on the stack
+	push rX
 	jsr prhex			# and print it
-	pop x
-	mov x, sp+0			# Push low byte on the stack
-	push x
+	pop rX
+	mov rX, sp+0			# Push low byte on the stack
+	push rX
 	jsr prhex			# and print it
-	pop x
+	pop rX
 	out '\n'
 
 # Now, simply move a word value between the locals on the stack
 	drar sp+0, sp+2			# Load addresses of the two locals
 	movwdrar			# Move from source to dest
-	mov x, sp+1			# Push high byte on the stack
-	push x
+	mov rX, sp+1			# Push high byte on the stack
+	push rX
 	jsr prhex			# and print it
-	pop x
-	mov x, sp+0			# Push low byte on the stack
-	push x
+	pop rX
+	mov rX, sp+0			# Push low byte on the stack
+	push rX
 	jsr prhex			# and print it
-	pop x
+	pop rX
 	out '\n'
 	jmp $ffff
 
@@ -40,29 +40,29 @@
 # the only argument on the stack as two hex digits.
 # I'm sure this could be optimised.
 #
-prhex:	mov x, sp+2	# Get the value into A
-        ldb y, $04
-        asr x, y
-        ldb y, $0f
-        and x, y        # Get high nibble of X
-        ldb y, $09
-        jgt x, y, P1    # Skip if in range A to F
-        ldb y, $30      # Otherwise add '0'
-        jmp P2          # and print it
-P1:     ldb y, $37      # Add 55 to get it in 'A' to 'F'
+prhex:	mov rX, sp+2	 # Get the value into A
+        ldb rY, $04
+        asr rX, rY
+        ldb rY, $0f
+        and rX, rY       # Get high nibble of X
+        ldb rY, $09
+        jgt rX, rY, P1   # Skip if in range A to F
+        ldb rY, $30      # Otherwise add '0'
+        jmp P2           # and print it
+P1:     ldb rY, $37      # Add 55 to get it in 'A' to 'F'
 P2:     clc
-        add x, y
-        out x
+        add rX, rY
+        out rX
 
-        mov x, sp+2     # Get value back again
-        ldb y, $0f      # Get the low nibble of X
-        and x, y
-        ldb y, $09
-        jgt x, y, P3    # Skip if in range A to F
-        ldb y, $30      # Otherwise add '0'
-        jmp P4          # and print it
-P3:     ldb y, $37      # Add 55 to get it in 'A' to 'F'
+        mov rX, sp+2     # Get value back again
+        ldb rY, $0f      # Get the low nibble of X
+        and rX, rY
+        ldb rY, $09
+        jgt rX, rY, P3   # Skip if in range A to F
+        ldb rY, $30      # Otherwise add '0'
+        jmp P4           # and print it
+P3:     ldb rY, $37      # Add 55 to get it in 'A' to 'F'
 P4:     clc
-        add x, y
-        out x
+        add rX, rY
+        out rX
         rts

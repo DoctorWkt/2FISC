@@ -178,6 +178,7 @@ define CJMP_FLAGS():
 define CJMP_XY():
 	MEMwrite ARloread PCincr
 	MEMwrite ARhiread PCincr
+	Zero Oread
 	Awrite A-Bcomp Oread
 	Ohiwrite ARwrite Jmpena
 	uSreset
@@ -366,14 +367,14 @@ define ALUB_SY(OP):
 	ALUB_WW(A%B)
 
 # Increment
-1C incb_ww:
+1C incb_w:
 	LOAD_DR()
 	DRwrite MEMwrite A+1 Oread
 	DRwrite Olowrite MEMread
 	uSreset
 
 # Decrement
-1D decb_ww:
+1D decb_w:
 	LOAD_DR()
 	DRwrite MEMwrite A-1 Oread
 	DRwrite Olowrite MEMread
@@ -966,6 +967,26 @@ A7 incw_S:
 	ARincr DRincr
 	DRwrite MEMwrite A+0 Oread
 	DRwrite Olowrite MEMread
+	uSreset
+
+# Copy byte from address+rY offset to X
+A8 mov_xi:
+	CLC()
+	MEMwrite A+B Oread PCincr		# Add lo addr byte and Y
+	Olowrite DRloread
+	MEMwrite A+0 Oread PCincr		# Inc hi addr byte if needed
+	Olowrite DRhiread
+	DRwrite MEMwrite Aread
+	uSreset
+
+# Copy byte from X to address+rY offset
+A9 mov_ix:
+	CLC()
+	MEMwrite A+B Oread PCincr		# Add lo addr byte and Y
+	Olowrite DRloread
+	MEMwrite A+0 Oread PCincr		# Inc hi addr byte if needed
+	Olowrite DRhiread
+	DRwrite Awrite MEMread
 	uSreset
 
 # B0-1B: X/Y Jump instructions
