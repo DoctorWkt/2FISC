@@ -62,6 +62,7 @@
 50 1 rts
 51 5 movb_wS
 52 5 movw_wS
+54 5 movw_Sw
 58 5 movb_wp
 59 5 movb_pw
 5a 5 movw_wp

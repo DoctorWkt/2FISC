@@ -257,8 +257,8 @@ sub parse_complicated_operand {
     my $operand = shift;
     my ( $val, $size );
 
-    if ( $operand =~ m{^\*sp\+(\d+)} ) {    # Pointer on the stack
-	my $offset = $1;
+    if ( $operand =~ m{^\*sp([\+\-]\d+)} ) {    # Pointer on the stack
+	my $offset = $1 & 0xffff;
 	( $val, $size ) = parse_operand($offset);    # Mainly for error checking
 	return ( $val, 'P' );
     }
@@ -275,8 +275,8 @@ sub parse_complicated_operand {
 	return ( $val, 'a' );
     }
 
-    if ( $operand =~ m{^sp\+(\d+)} ) {		     # sp + decimal offset
-	my $offset = $1;
+    if ( $operand =~ m{^sp([\+\-]\d+)} ) {	     # sp +/- decimal offset
+	my $offset = $1 & 0xffff;
 	( $val, $size ) = parse_operand($offset);    # Mainly for error checking
 	return ( $val, 'S' );
     }

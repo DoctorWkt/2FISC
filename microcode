@@ -658,16 +658,23 @@ define ALUB_SY(OP):
 	DRwrite Awrite MEMread			# and store in the destination
 	uSreset
 
-# Increment a word at a constant offset
-# on the stack. NOT DONE YET
-#53 incw_S: CLC()				# Clear carry
-#	SPwrite MEMwrite A+1 Oread		# Low byte +1
-#	SPwrite Olowrite MEMread		# Write back
-#	Stkincr
-#	SPwrite MEMwrite A+0 Oread		# High byte +carry
-#	SPwrite Olowrite MEMread		# Write back
-#	Stkdecr
-#	uSreset
+# Move a word from a memory location to
+# a constant offset on the stack
+54 movw_Sw:
+	CLC()					# Clear carry
+	SPwrite ADlowrite Bread			# Get SPlo into B
+	MEMwrite A+B Oread PCincr		# Calculate SPlo+offset
+	Olowrite DRloread			# and store in DRlo
+	SPwrite ADhiwrite Bread			# Get SPhi into B
+	MEMwrite A+B Oread PCincr		# Calculate SPhi+offset
+	Olowrite DRhiread			# and store in DRhi
+	LOAD_AR()				# Get source address
+	ARwrite MEMwrite Aread			# Load byte at that address
+	DRwrite Awrite MEMread			# and store in the destination
+	ARincr DRincr
+	ARwrite MEMwrite Aread			# Load byte at next address
+	DRwrite Awrite MEMread			# and store in the destination
+	uSreset
 
 ## Pointer instructions
 

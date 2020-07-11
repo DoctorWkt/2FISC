@@ -1730,3 +1730,11 @@ so we can choose the output file name. Done.
 I've also ordered a hot air reflow station and also a tablet oscilloscope,
 so my addiction is getting serious! The PCBs arrived last night, but
 I'm going to wait until the reflow station and the solder flux arrives.
+
+## Sat 11 Jul 16:52:07 AEST 2020
+
+I just realised that the instruction mnemonics that `clc` is using are
+out of date, so I brought it up to date. It also now compiles and
+assembles to an "a.out" format which I can upload to the new ROM monitor.
+So once I build the hardware I will be able to burn the ROM once and
+the upload programs through the monitor.
