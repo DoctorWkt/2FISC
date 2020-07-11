@@ -1728,4 +1728,5 @@ which simply prints out "Hello". I will add a `-o` flag to `cas`
 so we can choose the output file name. Done.
 
 I've also ordered a hot air reflow station and also a tablet oscilloscope,
-so my addiction is getting serious!
+so my addiction is getting serious! The PCBs arrived last night, but
+I'm going to wait until the reflow station and the solder flux arrives.
