@@ -7,21 +7,22 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-my @MEM = (0) x 65536;    # Contents of memory
+my @MEM = (0) x 65536;	  # Contents of memory
 my @Line;
 my @Linenum;
 my $linenum;
-my $debug     = 0;
-my $firstpass = 1;
-my $isinrom   = 0;           # True if we are targetting ROM
-my $inittextposn = 0x4000;   # Start at 0x4000 unless in ROM
-my $textposn;      	     # Next available position in .text section
-my $dataposn  = 0;           # Next available position in .data section
-my $isindata  = 0;           # If true, in the .data section
-my $posn      = $inittextposn;
+my $debug	 = 0;
+my $firstpass	 = 1;
+my $isinrom	 = 0;	      # True if we are targetting ROM
+my $inittextposn = 0x4000;    # Start at 0x4000 unless in ROM
+my $textposn;		      # Next available position in .text section
+my $dataposn = 0;	      # Next available position in .data section
+my $isindata = 0;	      # If true, in the .data section
+my $posn     = $inittextposn;
 my %Inst;
-my @Numlabel;			# Sparse 2D array of numeric labels
-                        	# and at what location they were defined.
+my @Numlabel;		      # Sparse 2D array of numeric labels
+			      # and at what location they were defined.
+my $outfile = "a.out";	      # Name of the output file
 
 # Load the opcodes file to populate the %Inst hash
 sub load_opcodes {
@@ -36,24 +37,24 @@ sub load_opcodes {
 
     open( my $IN, "<", "opcodes" ) || die("Cannot read opcodes: $!\n");
     while (<$IN>) {
-        chomp;
-        $lnum++;
-        s{#.*}{};     # Lose comments
-        s{^\s+}{};    # Lose leading whitespace
-        s{\s+$}{};    # Lose trailing whitespace
-        next if (m{^$});    # Ignore empty lines
+	chomp;
+	$lnum++;
+	s{#.*}{};     # Lose comments
+	s{^\s+}{};    # Lose leading whitespace
+	s{\s+$}{};    # Lose trailing whitespace
+	next if (m{^$});    # Ignore empty lines
 
-        my ( $opcode, $oplen, $name ) = split( m{\s+}, $_ );
-        die("Missing opcode on line $lnum\n") if ( !defined($opcode) );
-        die("Missing oplen on line $lnum\n")  if ( !defined($oplen) );
-        die("Missing name on line $lnum\n")   if ( !defined($name) );
-        die("Instruction $name redefined on line $lnum\n")
-          if ( defined( $Inst{$name} ) );
-        die("Opcode $opcode redefined on line $lnum\n")
-          if ( defined( $Opcode{$opcode} ) );
+	my ( $opcode, $oplen, $name ) = split( m{\s+}, $_ );
+	die("Missing opcode on line $lnum\n") if ( !defined($opcode) );
+	die("Missing oplen on line $lnum\n")  if ( !defined($oplen) );
+	die("Missing name on line $lnum\n")   if ( !defined($name) );
+	die("Instruction $name redefined on line $lnum\n")
+	  if ( defined( $Inst{$name} ) );
+	die("Opcode $opcode redefined on line $lnum\n")
+	  if ( defined( $Opcode{$opcode} ) );
 
-        $Inst{$name} = [ hex($opcode), $oplen ];
-        $Opcode{$opcode} = 1;
+	$Inst{$name} = [ hex($opcode), $oplen ];
+	$Opcode{$opcode} = 1;
     }
     close($IN);
 }
@@ -73,19 +74,21 @@ sub get_numeric_label_value {
     foreach my $fval ( @{$lref} ) {
 
 	# We found a label ahead of the current position
-	if ($fval > $posn) {
-	  # Return it if we want a forward label
-          return ($fval, 'w') if ($direction eq "f");
-	  # Stop looking when we want a backward label
-	  last;
+	if ( $fval > $posn ) {
+
+	    # Return it if we want a forward label
+	    return ( $fval, 'w' ) if ( $direction eq "f" );
+
+	    # Stop looking when we want a backward label
+	    last;
 	}
 
-        # We're still behind the current position, so record the last one
-        $bval = $fval;
+	# We're still behind the current position, so record the last one
+	$bval = $fval;
     }
 
     # Return the last back value if the direction is backward
-    return ($bval, 'w') if ( ( $direction eq "b" ) && defined($bval) );
+    return ( $bval, 'w' ) if ( ( $direction eq "b" ) && defined($bval) );
 
     # We didn't find a reference for the direction
     die("No value for $n$direction on line $linenum\n");
@@ -107,7 +110,7 @@ sub get_symbol {
 
     # If it's a reference to a numeric label, use another function
     if ( $name =~ m{^(\d+)([bf])$} ) {
-        return ( get_numeric_label_value( $1, $2 ) );
+	return ( get_numeric_label_value( $1, $2 ) );
     }
 
     die("Symbol $name on line $linenum is undefined\n")
@@ -121,9 +124,9 @@ sub add_symbol {
 
     # If it's a numeric label, store it in the @Numlabel array
     # tagged with the current position
-    if ($name=~ m{^\d+$}) {
-      push( @{ $Numlabel[$name] }, $posn );
-      return;
+    if ( $name =~ m{^\d+$} ) {
+	push( @{ $Numlabel[$name] }, $posn );
+	return;
     }
 
     die("Symbol $name on line $linenum already exists, can't redefine it\n")
@@ -143,40 +146,40 @@ sub tokenise_line {
 
     while ( length($_) != 0 ) {
 
-        # Skip over leading commas and spaces
-        if (s{^([,\s])\s*}{}) { next; }
+	# Skip over leading commas and spaces
+	if (s{^([,\s])\s*}{}) { next; }
 
-        # Character literal
-        if (s{^('[^']')\s*}{}) {
-            push( @tokenlist, $1 );
-            next;
-        }
+	# Character literal
+	if (s{^('[^']')\s*}{}) {
+	    push( @tokenlist, $1 );
+	    next;
+	}
 
-        # Escaped character literal
-        if (s{^('\\[^']')\s*}{}) {
-            push( @tokenlist, $1 );
-            next;
-        }
+	# Escaped character literal
+	if (s{^('\\[^']')\s*}{}) {
+	    push( @tokenlist, $1 );
+	    next;
+	}
 
-        # String literal
-        if (s{^("[^"]*")\s*}{}) {
+	# String literal
+	if (s{^("[^"]*")\s*}{}) {
 
-            # Change literal \n \t \r
-            my $str = $1;
-            $str =~ s/\\n/\n/g;
-            $str =~ s/\\t/\t/g;
-            $str =~ s/\\r/\r/g;
-            push( @tokenlist, $str );
-            next;
-        }
+	    # Change literal \n \t \r
+	    my $str = $1;
+	    $str =~ s/\\n/\n/g;
+	    $str =~ s/\\t/\t/g;
+	    $str =~ s/\\r/\r/g;
+	    push( @tokenlist, $str );
+	    next;
+	}
 
-        # Stuff that isn't commas or spaces
-        if (s{^([^,\s]+)}{}) {
-            push( @tokenlist, $1 );
-            next;
-        }
+	# Stuff that isn't commas or spaces
+	if (s{^([^,\s]+)}{}) {
+	    push( @tokenlist, $1 );
+	    next;
+	}
 
-        die("Unrecognised token $_\n");
+	die("Unrecognised token $_\n");
     }
 
     # print Dumper(\@tokenlist);
@@ -185,65 +188,65 @@ sub tokenise_line {
 
 # Parse an operand from a line and return its value and "type".
 # Type is one of:
-# 	'b': 1 byte
-# 	'w': 2 byte word
-# 	'l': 4 byte long
-# 	'p': 2 byte pointer
-# 	'x': X register
-# 	'y': Y register
-# 	's': Stack pointer
-# 	'S': Stack pointer plus offset
-# 	'P': Pointer on the stack
+#	'b': 1 byte
+#	'w': 2 byte word
+#	'l': 4 byte long
+#	'p': 2 byte pointer
+#	'x': X register
+#	'y': Y register
+#	's': Stack pointer
+#	'S': Stack pointer plus offset
+#	'P': Pointer on the stack
 #	'a': 2 byte address
 #	'i': 2 byte address + rY offset
 #
 sub parse_operand {
     my $operand = shift;
 
-    if ( $operand eq '.' ) {		# Current position
-        return ( $posn, 'w' );
+    if ( $operand eq '.' ) {	# Current position
+	return ( $posn, 'w' );
     }
 
-    if ( $operand eq "rX" ) {    	# X register
-        return ( 0, 'x' );
+    if ( $operand eq "rX" ) {	 # X register
+	return ( 0, 'x' );
     }
 
-    if ( $operand eq "rY" ) {    	# Y register
-        return ( 0, 'y' );
+    if ( $operand eq "rY" ) {	 # Y register
+	return ( 0, 'y' );
     }
 
-    if ( $operand eq "sp" ) {    	# Stack pointer
-        return ( 0, 's' );
+    if ( $operand eq "sp" ) {	 # Stack pointer
+	return ( 0, 's' );
     }
 
     if ( $operand =~ m{^'(.)'$} ) {    # 1-byte char const
-        my $char = $1;
-        return ( ord($char), 'b' );
+	my $char = $1;
+	return ( ord($char), 'b' );
     }
 
-    if ( $operand =~ m{^'\\(.)'$} ) {    # Escaped character
-        my $char = $1;
-        $char =~ y{tnr}{\t\n\r};
-        return ( ord($char), 'b' );
+    if ( $operand =~ m{^'\\(.)'$} ) {	 # Escaped character
+	my $char = $1;
+	$char =~ y{tnr}{\t\n\r};
+	return ( ord($char), 'b' );
     }
 
-    return ( hex($1), 'l' )              # 4-byte hex value
+    return ( hex($1), 'l' )		 # 4-byte hex value
       if ( $operand =~ m{^\$([0-9A-Fa-f]{8})$} );
-    return ( hex($1), 'w' )              # 2-byte hex value
+    return ( hex($1), 'w' )		 # 2-byte hex value
       if ( $operand =~ m{^\$([0-9A-Fa-f]{4})$} );
-    return ( hex($1), 'b' )              # 1-byte hex value
+    return ( hex($1), 'b' )		 # 1-byte hex value
       if ( $operand =~ m{^\$([0-9A-Fa-f]{2})$} );
 
-    if ( $operand =~ m{^(-?\d+)$} ) {    # Decimal value
-        my $val = $1;
-        return ( $val, 'l' )
-          if ( ( $val < -32768 ) || ( $val > 65535 ) );
-        return ( $val, 'w' )
-          if ( ( $val < -128 ) || ( $val > 127 ) );
-        return ( $val, 'b' );
+    if ( $operand =~ m{^(-?\d+)$} ) {	 # Decimal value
+	my $val = $1;
+	return ( $val, 'l' )
+	  if ( ( $val < -32768 ) || ( $val > 65535 ) );
+	return ( $val, 'w' )
+	  if ( ( $val < -128 ) || ( $val > 127 ) );
+	return ( $val, 'b' );
     }
 
-    return ( get_symbol($1) )            # Symbol
+    return ( get_symbol($1) )		 # Symbol
       if ( $operand =~ m{^([\.\w]+)$} );
 
     die("Unrecognised operand on line $linenum: $operand\n");
@@ -255,42 +258,42 @@ sub parse_complicated_operand {
     my ( $val, $size );
 
     if ( $operand =~ m{^\*sp\+(\d+)} ) {    # Pointer on the stack
-        my $offset = $1;
-        ( $val, $size ) = parse_operand($offset);    # Mainly for error checking
-        return ( $val, 'P' );
+	my $offset = $1;
+	( $val, $size ) = parse_operand($offset);    # Mainly for error checking
+	return ( $val, 'P' );
     }
 
-    if ( $operand =~ m{^\*(\S*)} ) {                 # Pointer to value
-        my $simple = $1;
-        ( $val, $size ) = parse_operand($simple);
-        return ( $val, 'p' );
+    if ( $operand =~ m{^\*(\S*)} ) {		     # Pointer to value
+	my $simple = $1;
+	( $val, $size ) = parse_operand($simple);
+	return ( $val, 'p' );
     }
 
-    if ( $operand =~ m{^\&(\S*)} ) {                 # Location address
-        my $simple = $1;
-        ( $val, $size ) = parse_operand($simple);
-        return ( $val, 'a' );
+    if ( $operand =~ m{^\&(\S*)} ) {		     # Location address
+	my $simple = $1;
+	( $val, $size ) = parse_operand($simple);
+	return ( $val, 'a' );
     }
 
-    if ( $operand =~ m{^sp\+(\d+)} ) {              # sp + decimal offset
-        my $offset = $1;
-        ( $val, $size ) = parse_operand($offset);    # Mainly for error checking
-        return ( $val, 'S' );
+    if ( $operand =~ m{^sp\+(\d+)} ) {		     # sp + decimal offset
+	my $offset = $1;
+	( $val, $size ) = parse_operand($offset);    # Mainly for error checking
+	return ( $val, 'S' );
     }
 
-    if ( $operand =~ m{^(.*)\+rY$} ) {               # address + rY offset
-        my $base = $1;
-        ( $val, $size ) = parse_operand($base);      # Mainly for error checking
-        return ( $val, 'i' );
+    if ( $operand =~ m{^(.*)\+rY$} ) {		     # address + rY offset
+	my $base = $1;
+	( $val, $size ) = parse_operand($base);	     # Mainly for error checking
+	return ( $val, 'i' );
     }
 
     if ( $operand =~ m{^(.*)\+(\d+)} ) {    # something + decimal offset
-        my ( $simple, $offset ) = ( $1, $2 );
-        ( $val, $size ) = parse_operand($simple);
-        return ( $val + $offset, $size );
+	my ( $simple, $offset ) = ( $1, $2 );
+	( $val, $size ) = parse_operand($simple);
+	return ( $val + $offset, $size );
     }
 
-    return ( parse_operand($operand) );     # else a simple operand
+    return ( parse_operand($operand) );	    # else a simple operand
 }
 
 # Given a string that represent an instruction line, return:
@@ -309,8 +312,8 @@ sub parse_instruction {
 
     # Get any label
     if ( $word[0] =~ m{(.*):} ) {
-        $label = $1;
-        shift(@word);
+	$label = $1;
+	shift(@word);
     }
 
     # Return just the label if no operation
@@ -324,83 +327,84 @@ sub parse_instruction {
 
     # .globl: do nothing for now
     if ( $inst eq ".globl" ) {
-        return ( undef, undef );
+	return ( undef, undef );
     }
 
     # .data: Switch to data section
     if ( $inst eq ".data" ) {
-        return ( undef, undef ) if ($isindata);
-        die("No .data section in ROM\n") if ($isinrom);
+	return ( undef, undef ) if ($isindata);
+	die("No .data section in ROM\n") if ($isinrom);
 
-        # Save the current text position and load the data position
-        $textposn = $posn;
-        $posn     = $dataposn;
-        $isindata = 1;
-        return ( undef, undef );
+	# Save the current text position and load the data position
+	$textposn = $posn;
+	$posn	  = $dataposn;
+	$isindata = 1;
+	return ( undef, undef );
     }
 
     # .text: Switch to text section
     if ( $inst eq ".text" ) {
-        return ( undef, undef ) if ( !$isindata );
+	return ( undef, undef ) if ( !$isindata );
 
-        # Save the current data position and load the text position
-        $dataposn = $posn;
-        $posn     = $textposn;
-        $isindata = 0;
-        return ( undef, undef );
+	# Save the current data position and load the text position
+	$dataposn = $posn;
+	$posn	  = $textposn;
+	$isindata = 0;
+	return ( undef, undef );
     }
 
     # .rom: Target the 8K ROM
     if ( $inst eq ".rom" ) {
-        die("Must set .rom at the start! $textposn\n") if ( $isinrom == 1 );
+	die("Must set .rom at the start! $textposn\n") if ( $isinrom == 1 );
 
-        # Go back to position $0000
-	$inittextposn= 0;
-        $posn = $textposn = 0;
-        $isinrom = 1;
-        return ( undef, undef );
+	# Go back to position $0000
+	$inittextposn = 0;
+	$posn	      = $textposn = 0;
+	$isinrom      = 1;
+	$outfile      = "instr.rom" if ( $outfile eq "a.out" );
+	return ( undef, undef );
     }
 
     # .equ: give a label a fixed address
     if ( $inst eq ".equ" ) {
-        die(".equ with no label on line $linenum\n") if ( !defined($label) );
+	die(".equ with no label on line $linenum\n") if ( !defined($label) );
 
-        # Get the value and define the symbol
-        my ( $value, $size ) = parse_complicated_operand( shift(@word) );
-        die(".equ with no value on $linenum\n") if ( !defined($value) );
-        add_symbol( $label, $value, $size, 0 ) if ($firstpass);
-        return ( undef, undef );
+	# Get the value and define the symbol
+	my ( $value, $size ) = parse_complicated_operand( shift(@word) );
+	die(".equ with no value on $linenum\n") if ( !defined($value) );
+	add_symbol( $label, $value, $size, 0 ) if ($firstpass);
+	return ( undef, undef );
     }
 
     # .str: Place a string in memory terminated with a NUL. Define
     # any label associated with the string.
     if ( $inst eq ".str" ) {
-        my $oldposn = $posn;
-        add_symbol( $label, $posn, 'w', $isindata )
-          if ( $firstpass && defined($label) );
+	my $oldposn = $posn;
+	add_symbol( $label, $posn, 'w', $isindata )
+	  if ( $firstpass && defined($label) );
 
-        my $str = shift(@word);
-        foreach my $char ( split( "", substr( $str, 1, -1 ) ) ) {
-            $MEM[ $posn++ ] = ord($char);
-        }
-        $MEM[ $posn++ ] = 0;
-        if ( $debug && !$firstpass ) {
-            printf( "%04x: ", $oldposn );
-            while ( $oldposn < $posn ) {
-                printf( "%02x ", $MEM[ $oldposn++ ] );
-            }
-            print("\n");
-        }
-        return ( undef, undef );
+	my $str = shift(@word);
+	foreach my $char ( split( "", substr( $str, 1, -1 ) ) ) {
+	    $MEM[ $posn++ ] = ord($char);
+	}
+	$MEM[ $posn++ ] = 0;
+	if ( $debug && !$firstpass ) {
+	    printf( "%04x: ", $oldposn );
+	    while ( $oldposn < $posn ) {
+		printf( "%02x ", $MEM[ $oldposn++ ] );
+	    }
+	    print("\n");
+	}
+	return ( undef, undef );
     }
 
     # Now process the remaining operands
     foreach my $operand (@word) {
-        my ( $value, $size ) = parse_complicated_operand($operand);
-        if ( defined($value) ) {
-            push( @oplist, [ $value, $size ] );
-            $opsize = $opsize . $size;
-        }
+	my ( $value, $size ) = parse_complicated_operand($operand);
+	if ( defined($value) ) {
+	    push( @oplist, [ $value, $size ] );
+	    $opsize = $opsize . $size;
+	}
     }
 
     # Append the operands' size to the
@@ -420,15 +424,23 @@ while ( @ARGV > 1 ) {
 
     # Enable debugging
     if ( $ARGV[0] eq "-d" ) {
-        $debug++;
-        shift(@ARGV);
-        next;
+	$debug++;
+	shift(@ARGV);
+	next;
     }
-    die("Usage: $0 [-d] infile [infile ...]\n");
+
+    # Set the output file name
+    if ( $ARGV[0] eq "-o" ) {
+	shift(@ARGV);
+	$outfile = shift(@ARGV);
+	next;
+    }
+
+    die("Usage: $0 [-d] [-o outfile] infile [infile ...]\n");
 }
 
 # Give usage
-die("Usage: $0 [-d] infile [infile ...]\n") if ( @ARGV < 1 );
+die("Usage: $0 [-d] [-o outfile] infile [infile ...]\n") if ( @ARGV < 1 );
 
 # Load the instruction names, opcodes and lengths
 load_opcodes();
@@ -438,20 +450,19 @@ foreach my $i ( 0 .. 7 ) {
     add_symbol( "r$i", 0xFFD0 + $i * 4, 'w', 0 );
 }
 
-# Read in the instructions and store in the @Line array. Use the
-# C preprocessor as well.
+# Read in the instructions and store in the @Line array.
 foreach my $file (@ARGV) {
     open( my $IN, "<", $file ) || die("Cannot open $file: $!");
     $linenum = 0;
     while (<$IN>) {
-        chomp;
-        $linenum++;
-        s{#.*}{};     # Lose comments
-        s{^\s+}{};    # Lose leading whitespace
-        s{\s+$}{};    # Lose trailing whitespace
-        next if (m{^$});    # Ignore empty lines
-        push( @Line, $_ );  # Save the cleaned-up line and its line number
-        push( @Linenum, "$file:$linenum" );
+	chomp;
+	$linenum++;
+	s{#.*}{};     # Lose comments
+	s{^\s+}{};    # Lose leading whitespace
+	s{\s+$}{};    # Lose trailing whitespace
+	next if (m{^$});    # Ignore empty lines
+	push( @Line, $_ );  # Save the cleaned-up line and its line number
+	push( @Linenum, "$file:$linenum" );
     }
     close($IN);
 }
@@ -461,32 +472,32 @@ foreach my $i ( 0 .. ( @Line - 1 ) ) {
     my $line = $Line[$i];
     $linenum = $Linenum[$i];
     foreach my $inst ( split( m{\s*;\s*}, $line ) ) {
-        my ( $label, $inst, @oplist ) = parse_instruction($inst);
+	my ( $label, $inst, @oplist ) = parse_instruction($inst);
 
-        if ($debug) {
-            printf( "%s (%04x) ", $linenum, $posn );
-            if ( defined($label) ) {
-                print("$label:");
-            } else {
-                print("\t");
-            }
-            if ( defined($inst) ) {
-              print("\t$inst ");
-              foreach my $op (@oplist) {
-                printf( " \$%x(%s)", $op->[0], $op->[1] );
-  	      }
-            }
-            print("\n");
-        }
+	if ($debug) {
+	    printf( "%s (%04x) ", $linenum, $posn );
+	    if ( defined($label) ) {
+		print("$label:");
+	    } else {
+		print("\t");
+	    }
+	    if ( defined($inst) ) {
+		print("\t$inst ");
+		foreach my $op (@oplist) {
+		    printf( " \$%x(%s)", $op->[0], $op->[1] );
+		}
+	    }
+	    print("\n");
+	}
 
-        # Set the label's location
-        add_symbol( $label, $posn, 'w', $isindata ) if ( defined($label) );
+	# Set the label's location
+	add_symbol( $label, $posn, 'w', $isindata ) if ( defined($label) );
 
-        # Move the position up
-        next if ( !defined($inst) );
-        die("Unrecognised instruction on line $linenum: $inst\n")
-          if ( !defined( $Inst{$inst} ) );
-        $posn += $Inst{$inst}[1];
+	# Move the position up
+	next if ( !defined($inst) );
+	die("Unrecognised instruction on line $linenum: $inst\n")
+	  if ( !defined( $Inst{$inst} ) );
+	$posn += $Inst{$inst}[1];
     }
 }
 
@@ -501,88 +512,94 @@ foreach my $name ( keys(%Sym) ) {
     $Sym{$name}[0] += $dataposn if ( $Sym{$name}[2] );
 
     # printf( "%04x %s %d: %s \n",
-    #    $Sym{$name}[0], $Sym{$name}[1], $Sym{$name}[2], $name );
+    #	 $Sym{$name}[0], $Sym{$name}[1], $Sym{$name}[2], $name );
 }
 
 # Second pass: generate the machine code
-$isinrom   = 0;           # Don't worry, it will get set again if needed
+$isinrom   = 0;		      # Don't worry, it will get set again if needed
 $firstpass = 0;
-$posn      = $inittextposn;
+$posn	   = $inittextposn;
 print("\nPass Two\n") if ($debug);
 foreach my $i ( 0 .. ( @Line - 1 ) ) {
     my $line = $Line[$i];
     $linenum = $Linenum[$i];
     foreach my $inst ( split( m{\s*;\s*}, $line ) ) {
-        my ( $label, $inst, @oplist ) = parse_instruction($inst);
-        next if ( !defined($inst) );
-        my $instsize = 0;
+	my ( $label, $inst, @oplist ) = parse_instruction($inst);
+	next if ( !defined($inst) );
+	my $instsize = 0;
 
-        # Put the instruction in memory, unless the instruction
-        # is a pseudo-op (with opcode -1).
-        my $oldposn = $posn;
-        if ( $Inst{$inst}[0] != -1 ) {
-            $MEM[ $posn++ ] = $Inst{$inst}[0];
-            $instsize++;
-        }
+	# Put the instruction in memory, unless the instruction
+	# is a pseudo-op (with opcode -1).
+	my $oldposn = $posn;
+	if ( $Inst{$inst}[0] != -1 ) {
+	    $MEM[ $posn++ ] = $Inst{$inst}[0];
+	    $instsize++;
+	}
 
-        # Put the operands in memory
-        foreach my $op (@oplist) {
-            if ( $op->[1] eq 'b' ) {
-                $MEM[ $posn++ ] = $op->[0] & 0xff;
-                $instsize += 1;
-            }
-            if (   ( $op->[1] eq 'w' )
-                || ( $op->[1] eq 'S' )
-                || ( $op->[1] eq 'p' )
-                || ( $op->[1] eq 'P' )
-                || ( $op->[1] eq 'i' )
-                || ( $op->[1] eq 'a' ) )
-            {
-                $MEM[ $posn++ ] = $op->[0] & 0xff;
-                $MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;
-                $instsize += 2;
-            }
-            if ( $op->[1] eq 'l' ) {
-                $MEM[ $posn++ ] = $op->[0] & 0xff;
-                $MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;
-                $MEM[ $posn++ ] = ( $op->[0] >> 16 ) & 0xff;
-                $MEM[ $posn++ ] = ( $op->[0] >> 24 ) & 0xff;
-                $instsize += 4;
-            }
-        }
+	# Put the operands in memory
+	foreach my $op (@oplist) {
+	    if ( $op->[1] eq 'b' ) {
+		$MEM[ $posn++ ] = $op->[0] & 0xff;
+		$instsize += 1;
+	    }
+	    if (   ( $op->[1] eq 'w' )
+		|| ( $op->[1] eq 'S' )
+		|| ( $op->[1] eq 'p' )
+		|| ( $op->[1] eq 'P' )
+		|| ( $op->[1] eq 'i' )
+		|| ( $op->[1] eq 'a' ) )
+	    {
+		$MEM[ $posn++ ] = $op->[0] & 0xff;
+		$MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;
+		$instsize += 2;
+	    }
+	    if ( $op->[1] eq 'l' ) {
+		$MEM[ $posn++ ] = $op->[0] & 0xff;
+		$MEM[ $posn++ ] = ( $op->[0] >> 8 ) & 0xff;
+		$MEM[ $posn++ ] = ( $op->[0] >> 16 ) & 0xff;
+		$MEM[ $posn++ ] = ( $op->[0] >> 24 ) & 0xff;
+		$instsize += 4;
+	    }
+	}
 
-        # Check that the calculated instruction size tallies with the
-        # actual instruction size
-        die( "Incorrect size of operands on line $linenum: $inst, ",
-            $Inst{$inst}[1], ", ", ($instsize), "\n" )
-          if ( $Inst{$inst}[1] != ($instsize) );
+	# Check that the calculated instruction size tallies with the
+	# actual instruction size
+	die( "Incorrect size of operands on line $linenum: $inst, ",
+	    $Inst{$inst}[1], ", ", ($instsize), "\n" )
+	  if ( $Inst{$inst}[1] != ($instsize) );
 
-        if ($debug) {
-            printf( "%04x: ", $oldposn );
-            while ( $oldposn < $posn ) {
-                printf( "%02x ", $MEM[ $oldposn++ ] );
-            }
-            print("\n");
-        }
+	if ($debug) {
+	    printf( "%04x: ", $oldposn );
+	    while ( $oldposn < $posn ) {
+		printf( "%02x ", $MEM[ $oldposn++ ] );
+	    }
+	    print("\n");
+	}
     }
 }
 
 # Work out the start and end positions
 my ( $start, $end );
+my $OUT;
 if ($isinrom) {
+
     # 8K of instruction ROM
     ( $start, $end ) = ( 0, 0x1fff );
 } else {
     ( $start, $end ) = ( 0x4000, $endposn - 1 );
 }
-printf("start 0x%x end 0x%x\n", $start, $end) if ($debug);
+printf( "start 0x%x end 0x%x\n", $start, $end ) if ($debug);
+
+# Open up the output file
+open( $OUT, ">", $outfile ) || die("Can't write to $outfile: $!\n");
+printf( $OUT "C%04x\n", $start ) if ( !$isinrom );
 
 # Write out the memory contents
-open( my $OUT, ">", "instr.rom" ) || die("Can't write to instr.rom: $!\n");
 for my $i ( $start .. $end ) {
     printf( $OUT "%02x ", $MEM[$i] ? $MEM[$i] : 0 );
     print( $OUT "\n" ) if ( ( $i % 16 ) == 15 );
 }
+print( $OUT "Z\n" ) if ( !$isinrom );
 close($OUT);
 
 exit(0);

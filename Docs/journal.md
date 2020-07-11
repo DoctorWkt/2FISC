@@ -1712,3 +1712,20 @@ why I had to use `int xx;` above. For now, I've renamed `x` and `y` to
 
 I've made a start on tansliterating the CSCvon8 monitor, but I think
 I need to write some instructions so I can do `address+rY` indexing.
+
+## Sat 11 Jul 11:26:05 AEST 2020
+
+It's been a tough time with my wife in hospital. This morning I've
+managed to get the monitor working properly, and I've uploaded and
+run my first program via the monitor:
+
+```
+C4000
+06 48 06 65 06 6c 06 6c 06 6f 06 0a 50 Z
+```
+
+which simply prints out "Hello". I will add a `-o` flag to `cas`
+so we can choose the output file name. Done.
+
+I've also ordered a hot air reflow station and also a tablet oscilloscope,
+so my addiction is getting serious!
