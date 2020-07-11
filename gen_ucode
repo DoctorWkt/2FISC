@@ -205,6 +205,15 @@ open( $IN, "<", "microcode" ) || die("Can't read microcode: $!\n");
 while (<$IN>) {
     chomp;
     $linenum++;
+
+    # Join lines ending with a backslash
+    while ($_ =~ m{(.*)\\$}) {
+      $_ = $1 . <$IN>;
+      chomp;
+      $linenum++;
+    }
+
+
     s{#.*}{};     # Lose comments
     s{^\s+}{};    # Lose leading whitespace
     s{\s+$}{};    # Lose trailing whitespace

@@ -207,13 +207,19 @@ while (<$ROMIN>) {
 close($ROMIN);
 
 # Load the instructions
-open( $ROMIN, "<", "instr.rom" ) || die("Can't open instr.rom: $!\n");
+my $inputfile= ($isinram) ? "a.out" : "instr.rom";
+open( $ROMIN, "<", $inputfile ) || die("Can't open $inputfile: $!\n");
 
-# If we are running code in RAM, load it starting at 0x4000
+# If we are in RAM, get the start address from the first line
 if ($isinram) {
-    my $i = 0x4000;
+    my $i = <$ROMIN>;
+    chomp($i);
+    $i=~ s{C}{};
+    $i= hex($i);
     while (<$ROMIN>) {
+        # Get rid of the ' Z' on the last line, too
         chomp;
+	$_ =~ s{ Z}{};
         foreach my $val ( split( /\s+/, $_ ) ) {
             $RAM[0][ $i++ ] = hex($val);
         }

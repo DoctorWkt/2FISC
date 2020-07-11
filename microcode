@@ -79,11 +79,14 @@ Jmpena	  = F000
 # The following lists control lines which needs to be asserted always, unless
 # one or more of the other control lines are named. We also use this to
 # prevent two or more of the list from being asserted at the same time.
-assert A+B unless A-B A&B A|B A^B A<<B A>>B A*B A/B A%B A+0 A-Bcomp Zero A+1 A-1 ~A
+assert A+B unless A-B A&B A|B A^B A<<B A>>B A*B A/B A%B A+0 A-Bcomp \
+	Zero A+1 A-1 ~A
 assert PCwrite unless ARwrite SPwrite DRwrite
 assert Stkhold unless Stkincr Stkdecr PCincr
-assert MEMwrite unless ADhiwrite ADlowrite UARTwrite Awrite Olowrite Ohiwrite ARincr uSreset DbWr9 DbWrA DbWrB DbWrC DbWrD DbWrE DbWrF
-assert Noread unless DRincr SPhiread SPloread ARhiread ARloread DRhiread DRloread Bankread Aread Bread IRread MEMread Oread UARTread Jmpena
+assert MEMwrite unless ADhiwrite ADlowrite UARTwrite Awrite Olowrite \
+	Ohiwrite ARincr uSreset DbWr9 DbWrA DbWrB DbWrC DbWrD DbWrE DbWrF
+assert Noread unless DRincr SPhiread SPloread ARhiread ARloread DRhiread \
+	DRloread Bankread Aread Bread IRread MEMread Oread UARTread Jmpena
 
 # This line, if given, is placed at position zero for each microinstruction.
 # The purpose is to load the IR with the instruction and increment the PC.
